@@ -252,6 +252,10 @@ void IRAM_ATTR app_main(void)
 				break;
 			}
 		}
+		printf("Sync=%d\n",sync);
+		ABG_DMALIST[0] = 0x80ffffff;
+		ABG_DMALIST[3] = 0x80ffffff;
+		continue;
 
 		// und nun die Pixel in den VGA-Puffer kopieren
 		if (sync>0)
@@ -259,11 +263,23 @@ void IRAM_ATTR app_main(void)
 			uint8_t* bufpos = (uint8_t*)((sync - BSYNC_PIXEL_ABSTAND) + (int)buf);
 			uint8_t* vgapos = (uint8_t*)((ABG_Scan_Line-29)*640 + (int)VGA_BUF);
 
-			for (int i=0;i<640;i++)
+			for (int i=0;i<128;i++) // wir machen 5 Pixel pro Durchlauf, also 128*5 = 640 Pixel
 			{
 				*vgapos = COLORS[((*bufpos)|(*(bufpos+1))) & 3];  // 2 benachbarte Samples verbinden - oft sind die Pixel nur ein Sample breit, und die Position verschiebt sich zum Bildende etwas
 				vgapos++;
-				bufpos+=5;
+				bufpos+=6;
+				*vgapos = COLORS[((*bufpos)|(*(bufpos+1))) & 3];
+				vgapos++;
+				bufpos+=6;
+				*vgapos = COLORS[((*bufpos)|(*(bufpos+1))) & 3];
+				vgapos++;
+				bufpos+=6;
+				*vgapos = COLORS[((*bufpos)|(*(bufpos+1))) & 3];
+				vgapos++;
+				bufpos+=6;
+				*vgapos = COLORS[((*bufpos)|(*(bufpos+1))) & 3];
+				vgapos++;
+				bufpos+=5;  // <--- die 5 statt 6 ist Absicht!
 			}
 		}
 
