@@ -227,8 +227,8 @@ void IRAM_ATTR app_main(void)
 			{
 				for (int b=0;b<640*400;b++)  // VGA-Puffer leeren
 				{
-					//VGA_BUF[b]=0;
-					VGA_BUF[b]=(b & 255); // for testing VGA
+					VGA_BUF[b]=0;
+					//VGA_BUF[b]=(b & 255); // for testing VGA
 				}
 				a=100000;
 			}
@@ -254,14 +254,14 @@ void IRAM_ATTR app_main(void)
 			}
 		}
 		// ----------- enable for debugging  vvvvvvvv
-		
+		/* */
 		printf("Sync=%d\n",sync);
 		ABG_DMALIST[0] = 0x80ffffff;
 		ABG_DMALIST[3] = 0x80ffffff;
-		continue;
-		
+		continue; /*
+		*/
 		// ----------- enable for debugging  ^^^^^^^^
-
+/*
 		// und nun die Pixel in den VGA-Puffer kopieren
 		if (sync>0)
 		{
@@ -293,7 +293,7 @@ void IRAM_ATTR app_main(void)
 				bufpos+=5;  // <--- die 5 statt 6 ist Absicht!
 			}
 		}
-
+		*/
 		// Puffer wieder für den DMA-Kontroller freigeben
 		next[0]=0x80ffffff;
 
