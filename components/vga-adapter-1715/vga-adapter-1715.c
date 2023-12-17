@@ -252,10 +252,14 @@ void IRAM_ATTR app_main(void)
 				break;
 			}
 		}
+		// ----------- enable for debugging  vvvvvvvv
+		/*
 		printf("Sync=%d\n",sync);
 		ABG_DMALIST[0] = 0x80ffffff;
 		ABG_DMALIST[3] = 0x80ffffff;
 		continue;
+		*/
+		// ----------- enable for debugging  ^^^^^^^^
 
 		// und nun die Pixel in den VGA-Puffer kopieren
 		if (sync>0)
