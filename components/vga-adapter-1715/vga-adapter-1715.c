@@ -21,10 +21,10 @@
 #define PIN_NUM_VGA_VSYNC 17
 #define PIN_NUM_VGA_HSYNC 18
 
-#define PIN_NUM_ABG_BSYNC1 40
+#define PIN_NUM_ABG_BSYNC1 40 
 #define PIN_NUM_ABG_BSYNC2 41
-#define PIN_NUM_ABG_VIDEO1 38
-#define PIN_NUM_ABG_VIDEO2 39
+#define PIN_NUM_ABG_VIDEO1 37 //38 ist RGB LED auf dem DevKit
+#define PIN_NUM_ABG_VIDEO2 39 
 
 #ifdef DEBUG
 #define PIN_NUM_DEBUG_SPI 10//nur für debug
@@ -32,9 +32,14 @@
 #endif
 
 // Konstanten
-#define BSYNC_PIXEL_ABSTAND 3235 // Zeitabstand zwischen dem ersten Pixel und der fallenden Flanke des nachfolgendem BSYN-Impulses in 80MHz-Samples
-#define BSYNC_SUCHE_START 3380   // Sample, ab dem nach dem BSYN-Impuls gesucht wird
-uint8_t COLORS[] = {0, 0b00010101, 0b00101010, 0b00111111};  // Farbdefinition
+// #define BSYNC_PIXEL_ABSTAND 3235 // Zeitabstand zwischen dem ersten Pixel und der fallenden Flanke des nachfolgendem BSYN-Impulses in 80MHz-Samples
+#define BSYNC_PIXEL_ABSTAND 2050 // Zeitabstand zwischen dem ersten Pixel und der fallenden Flanke des nachfolgendem BSYN-Impulses in 40MHz-Samples
+// #define BSYNC_SUCHE_START 3380   // Sample, ab dem nach dem BSYN-Impuls gesucht wird
+#define BSYNC_SUCHE_START 2150   // Sample, ab dem nach dem BSYN-Impuls gesucht wird
+#define ABG_LINE_START 22 // wo beginnt die erste Ausgabezeile nach BSYNC?
+// uint8_t COLORS[] = {0, 0b00010101, 0b00101010, 0b00111111};  // Farbdefinition
+// uint8_t COLORS[] = {0b00010101, 0b00101010, 0, 0b00111111};  // Farbdefinition
+uint8_t COLORS[] = {0b00101010, 0b00010101, 0, 0b00111111};  // Farbdefinition
 
 // diese Definition scheint in den Header-Dateien von ESP zu fehlen!
 #define REG_SPI_BASE(i)     (DR_REG_SPI1_BASE + (((i)>1) ? (((i)* 0x1000) + 0x20000) : (((~(i)) & 1)* 0x1000 )))
@@ -47,11 +52,14 @@ uint8_t* VGA_BUF;
 // Interrupt: wird bei fallender Flanke von BSYN aufgerufen
 static void IRAM_ATTR abg_bsync_interrupt(void *args)
 {
-	usleep(1);  // kurz warten. Je nachdem wie der ESP heute drauf ist, ist der kurze BSYN-Impuls noch nicht ganz vorbei
+	// VGA_BUF[0]++; // RT Post#81
+
+	usleep(6); //1);  // kurz warten. Je nachdem wie der ESP heute drauf ist, ist der kurze BSYN-Impuls noch nicht ganz vorbei
 	if (gpio_get_level(PIN_NUM_ABG_BSYNC2)!=0)
 	{
+		// VGA_BUF[10]++; // RT Post#81
 		// bsync Impuls ist vorbei - war ein VSYNC
-		if (ABG_Scan_Line > 28)
+		if (ABG_Scan_Line > ABG_LINE_START)
 		{
 		    REG_SET_BIT(GDMA_IN_LINK_CH1_REG, GDMA_INLINK_RESTART_CH1);  // das bewirkt, dass der DMA-Kontroller die Address-Tabelle neu einliest
 		    REG_SET_BIT(SPI_CMD_REG(2), SPI_USR);                        // neuen SPI-Transfer starten - die Parameter sind ja schon drin
@@ -60,6 +68,7 @@ static void IRAM_ATTR abg_bsync_interrupt(void *args)
 	}
 	else
 	{
+		// VGA_BUF[20]++; // RT Post#81
 		// bsync Impuls liegt immer noch an - ist ein HSYNC
 		ABG_Scan_Line = 0;
 	}
@@ -89,7 +98,8 @@ void setup_abg()
     {
     	.cs_ena_pretrans = 0,
 		.cs_ena_posttrans = 0,
-        .clock_speed_hz = SPI_MASTER_FREQ_80M, // Abtast-Frequenz 80MHz - das ist 5x mehr als wir eigendlich brauchen,
+        // .clock_speed_hz = SPI_MASTER_FREQ_80M, // Abtast-Frequenz 80MHz - das ist 5x mehr als wir eigendlich brauchen,
+        .clock_speed_hz = SPI_MASTER_FREQ_40M, // Abtast-Frequenz 40MHz - das ist 3x mehr als wir eigentlich brauchen,
         .flags = SPI_DEVICE_HALFDUPLEX,        // aber mit weniger gäbe es Probleme mit der Pixelsynchronisation
 	    .queue_size=1,
 #ifdef DEBUG
@@ -104,7 +114,8 @@ void setup_abg()
 	{
 	    .flags = SPI_TRANS_MODE_OCT,           // 8 Bit gleichzeitig einlesen. Es würde auch 4 reichen, aber dann wird die Auswertung langsamer und komplizierter
 	    .length = 0,                           // nix ausgeben...
-	    .rxlength = 28720,                     // nur 28k Samples einlesen
+	    // .rxlength = 28720,                     // nur 28k Samples einlesen
+	    .rxlength = 19200,                     // nur 19k Samples einlesen
 	    .rx_buffer = ABG_PIXBUF1,
 	};
 
@@ -228,7 +239,7 @@ void IRAM_ATTR app_main(void)
 				for (int b=0;b<640*400;b++)  // VGA-Puffer leeren
 				{
 					VGA_BUF[b]=0;
-					//VGA_BUF[b]=(b & 255); // for testing VGA
+					// VGA_BUF[b]=(b & 255); // for testing VGA
 				}
 				a=100000;
 			}
@@ -254,46 +265,81 @@ void IRAM_ATTR app_main(void)
 			}
 		}
 		// ----------- enable for debugging  vvvvvvvv
-		/* */
+		/* * /
 		printf("Sync=%d\n",sync);
 		ABG_DMALIST[0] = 0x80ffffff;
 		ABG_DMALIST[3] = 0x80ffffff;
-		continue; /*
+		continue; / *
 		*/
 		// ----------- enable for debugging  ^^^^^^^^
-/*
+
 		// und nun die Pixel in den VGA-Puffer kopieren
 		if (sync>0)
 		{
 			uint8_t* bufpos = (uint8_t*)((sync - BSYNC_PIXEL_ABSTAND) + (int)buf);
-			uint8_t* vgapos = (uint8_t*)((ABG_Scan_Line-29)*640 + (int)VGA_BUF);
+			uint8_t* vgapos = (uint8_t*)((ABG_Scan_Line - ABG_LINE_START-1)*640 + (int)VGA_BUF);
 
-			// for (int i=0;i<640;i++) /
+			// for (int i=0;i<640;i++) 
 			// {
 			// 	*vgapos = COLORS[((*bufpos)|(*(bufpos+1))) & 3];  // 2 benachbarte Samples verbinden - oft sind die Pixel nur ein Sample breit, und die Position verschiebt sich zum Bildende etwas
 			// 	vgapos++;
 			// 	bufpos+=5;
 			// }
-			for (int i=0;i<128;i++) // wir machen 5 Pixel pro Durchlauf, also 128*5 = 640 Pixel
+
+			// for (int i=0;i<128;i++) // wir machen 5 Pixel pro Durchlauf, also 128*5 = 640 Pixel
+			// {
+			// 	*vgapos = COLORS[((*bufpos)|(*(bufpos+1))) & 3];  // 2 benachbarte Samples verbinden - oft sind die Pixel nur ein Sample breit, und die Position verschiebt sich zum Bildende etwas
+			// 	vgapos++;
+			// 	bufpos+=6;
+			// 	*vgapos = COLORS[((*bufpos)|(*(bufpos+1))) & 3];
+			// 	vgapos++;
+			// 	bufpos+=6;
+			// 	*vgapos = COLORS[((*bufpos)|(*(bufpos+1))) & 3];
+			// 	vgapos++;
+			// 	bufpos+=6;
+			// 	*vgapos = COLORS[((*bufpos)|(*(bufpos+1))) & 3];
+			// 	vgapos++;
+			// 	bufpos+=6;
+			// 	*vgapos = COLORS[((*bufpos)|(*(bufpos+1))) & 3];
+			// 	vgapos++;
+			// 	bufpos+=5;  // <--- die 5 statt 6 ist Absicht!
+			// }
+
+			for (int i=0;i<64;i++) // wir machen 10 Pixel pro Durchlauf, also 64*10 = 640 Pixel
 			{
-				*vgapos = COLORS[((*bufpos)|(*(bufpos+1))) & 3];  // 2 benachbarte Samples verbinden - oft sind die Pixel nur ein Sample breit, und die Position verschiebt sich zum Bildende etwas
-				vgapos++;
-				bufpos+=6;
 				*vgapos = COLORS[((*bufpos)|(*(bufpos+1))) & 3];
 				vgapos++;
-				bufpos+=6;
+				bufpos+=3;
 				*vgapos = COLORS[((*bufpos)|(*(bufpos+1))) & 3];
 				vgapos++;
-				bufpos+=6;
+				bufpos+=3;
 				*vgapos = COLORS[((*bufpos)|(*(bufpos+1))) & 3];
 				vgapos++;
-				bufpos+=6;
+				bufpos+=3;
 				*vgapos = COLORS[((*bufpos)|(*(bufpos+1))) & 3];
 				vgapos++;
-				bufpos+=5;  // <--- die 5 statt 6 ist Absicht!
+				bufpos+=3;
+				*vgapos = COLORS[((*bufpos)|(*(bufpos+1))) & 3];
+				vgapos++;
+				bufpos+=3;
+				*vgapos = COLORS[((*bufpos)|(*(bufpos+1))) & 3];
+				vgapos++;
+				bufpos+=3;
+				*vgapos = COLORS[((*bufpos)|(*(bufpos+1))) & 3];
+				vgapos++;
+				bufpos+=3;
+				*vgapos = COLORS[((*bufpos)|(*(bufpos+1))) & 3];
+				vgapos++;
+				bufpos+=3;
+				*vgapos = COLORS[((*bufpos)|(*(bufpos+1))) & 3];
+				vgapos++;
+				bufpos+=3;
+				*vgapos = COLORS[((*bufpos)|(*(bufpos+1))) & 3];
+				vgapos++;
+				bufpos+=2;  // <--- die 2 statt 3 ist Absicht!
 			}
 		}
-		*/
+		
 		// Puffer wieder für den DMA-Kontroller freigeben
 		next[0]=0x80ffffff;
 
