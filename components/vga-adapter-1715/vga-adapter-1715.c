@@ -37,12 +37,30 @@
 #define PIN_NUM_DEBUG_COPY 14//nur für debug
 #endif
 
-// Konstanten
-// #define ABG_PIXEL_START 2.0f
-#define ABG_PIXEL_START 0.2f
+// Computer Typen
+#define A7100 1
+#define PC1715 2
 
-// uint8_t COLORS[] = {0, 0b00000100, 0b00001000, 0b00001100};  // Farbdefinition
+#define ZIELTYP PC1715
+
+// Konstanten
+#if ZIELTYP == A7100
+#define ABG_PIXEL_START 2.0f
+uint8_t COLORS[] = {0, 0b00000100, 0b00001000, 0b00001100};  // Farbdefinition
+#define _BS_PIXEL_ABSTAND  	1618
+#define _START_LINE 		28
+#define _INT_DELAY 			1
+#define _SPI_RX_LENGTH		14350
+
+#elif ZIELTYP == PC1715
+#define ABG_PIXEL_START 0.2f
 uint8_t COLORS[] = {0b00101010, 0b00010101, 0, 0b00111111};  // Farbdefinition
+#define _BS_PIXEL_ABSTAND  	2050
+#define _START_LINE 		22
+#define _INT_DELAY 			6
+#define _SPI_RX_LENGTH		19200
+#endif
+
 
 // diese Definition scheint in den Header-Dateien von ESP zu fehlen!
 #define REG_SPI_BASE(i)     (DR_REG_SPI1_BASE + (((i)>1) ? (((i)* 0x1000) + 0x20000) : (((~(i)) & 1)* 0x1000 )))
@@ -53,10 +71,10 @@ volatile uint32_t ABG_Scan_Line = 0;
 
 volatile uint32_t ABG_PIXEL_PER_LINE = 736;
 // volatile uint32_t BSYNC_PIXEL_ABSTAND = 1618;
-volatile uint32_t BSYNC_PIXEL_ABSTAND = 2050;
+volatile uint32_t BSYNC_PIXEL_ABSTAND = _BS_PIXEL_ABSTAND;
 
 // volatile uint32_t ABG_START_LINE = 28;
-volatile uint32_t ABG_START_LINE = 22;
+volatile uint32_t ABG_START_LINE = _START_LINE;
 
 int BSYNC_SUCHE_START = 0;
 uint8_t* PIXEL_STEP_LIST;
@@ -186,7 +204,7 @@ static void drawtext(char* txt, int count, int pos, char color)
 static void IRAM_ATTR abg_bsync_interrupt(void *args)
 {
 	// usleep(1);  // kurz warten. Je nachdem wie der ESP heute drauf ist, ist der kurze BSYN-Impuls noch nicht ganz vorbei
-	usleep(6);  // kurz warten. Je nachdem wie der ESP heute drauf ist, ist der kurze BSYN-Impuls noch nicht ganz vorbei
+	usleep(_INT_DELAY);  // kurz warten. Je nachdem wie der ESP heute drauf ist, ist der kurze BSYN-Impuls noch nicht ganz vorbei
 	if (gpio_get_level(PIN_NUM_ABG_BSYNC2)!=0)
 	{
 		// CPU-Zyklen 0 stellen
@@ -257,7 +275,7 @@ void setup_abg()
 	    .flags = SPI_TRANS_MODE_OCT,           // 8 Bit gleichzeitig einlesen. Es würde auch 4 reichen, aber dann wird die Auswertung langsamer und komplizierter
 	    .length = 0,                           // nix ausgeben...
 	    // .rxlength = 14350,//28720,                     // nur 28k Samples einlesen
-	    .rxlength = 19200,//28720,                     // nur 28k Samples einlesen
+	    .rxlength = _SPI_RX_LENGTH,//28720,                     // nur 28k Samples einlesen
 	    .rx_buffer = ABG_PIXBUF1,
 	};
 
