@@ -45,20 +45,22 @@
 
 // Konstanten
 #if ZIELTYP == A7100
-#define ABG_PIXEL_START 2.0f
+#define _MODE "A7100"
+#define _PIXEL_START 2.0f
 uint8_t COLORS[] = {0, 0b00000100, 0b00001000, 0b00001100};  // Farbdefinition
 #define _BS_PIXEL_ABSTAND  	1618
 #define _START_LINE 		28
 #define _INT_DELAY 			1
-#define _SPI_RX_LENGTH		14350
+#define _PIXEL_PER_LINE		736
 
 #elif ZIELTYP == PC1715
-#define ABG_PIXEL_START 0.2f
+#define _MODE "PC1715"
+#define _PIXEL_START 0.2f
 uint8_t COLORS[] = {0b00101010, 0b00010101, 0, 0b00111111};  // Farbdefinition
 #define _BS_PIXEL_ABSTAND  	2050
 #define _START_LINE 		22
 #define _INT_DELAY 			6
-#define _SPI_RX_LENGTH		19200
+#define _PIXEL_PER_LINE		736
 #endif
 
 
@@ -68,19 +70,17 @@ uint8_t COLORS[] = {0b00101010, 0b00010101, 0, 0b00111111};  // Farbdefinition
 // globale Variablen
 volatile uint32_t* ABG_DMALIST;
 volatile uint32_t ABG_Scan_Line = 0;
-
-volatile uint32_t ABG_PIXEL_PER_LINE = 736;
-// volatile uint32_t BSYNC_PIXEL_ABSTAND = 1618;
+volatile uint32_t ABG_PIXEL_PER_LINE = _PIXEL_PER_LINE;
 volatile uint32_t BSYNC_PIXEL_ABSTAND = _BS_PIXEL_ABSTAND;
-
-// volatile uint32_t ABG_START_LINE = 28;
 volatile uint32_t ABG_START_LINE = _START_LINE;
+volatile double ABG_PIXEL_START = _PIXEL_START;
+volatile bool ABG_RUN = false;
 
 int BSYNC_SUCHE_START = 0;
 uint8_t* PIXEL_STEP_LIST;
 uint8_t* VGA_BUF;
 uint8_t* OSD_BUF;
-volatile uint32_t bsyn_clock_diff = 2210000;
+volatile uint32_t bsyn_clock_diff = 0;
 volatile uint32_t bsyn_clock_last = 0;
 
 // Zeichensatz für das OSD-Textfeld
@@ -203,7 +203,6 @@ static void drawtext(char* txt, int count, int pos, char color)
 // Interrupt: wird bei fallender Flanke von BSYN aufgerufen
 static void IRAM_ATTR abg_bsync_interrupt(void *args)
 {
-	// usleep(1);  // kurz warten. Je nachdem wie der ESP heute drauf ist, ist der kurze BSYN-Impuls noch nicht ganz vorbei
 	usleep(_INT_DELAY);  // kurz warten. Je nachdem wie der ESP heute drauf ist, ist der kurze BSYN-Impuls noch nicht ganz vorbei
 	if (gpio_get_level(PIN_NUM_ABG_BSYNC2)!=0)
 	{
@@ -220,7 +219,7 @@ static void IRAM_ATTR abg_bsync_interrupt(void *args)
 		}
 
 		// bsync Impuls ist vorbei - war ein VSYNC
-		if (ABG_Scan_Line > ABG_START_LINE)
+		if (ABG_Scan_Line > ABG_START_LINE && ABG_RUN)
 		{
 		    REG_SET_BIT(GDMA_IN_LINK_CH1_REG, GDMA_INLINK_RESTART_CH1);  // das bewirkt, dass der DMA-Kontroller die Address-Tabelle neu einliest
 		    REG_SET_BIT(SPI_CMD_REG(2), SPI_USR);                        // neuen SPI-Transfer starten - die Parameter sind ja schon drin
@@ -259,7 +258,7 @@ void setup_abg()
     {
     	.cs_ena_pretrans = 0,
 		.cs_ena_posttrans = 0,
-        .clock_speed_hz = SPI_MASTER_FREQ_40M, // Abtast-Frequenz 80MHz - das ist 5x mehr als wir eigendlich brauchen,
+        .clock_speed_hz = SPI_MASTER_FREQ_40M, // Abtast-Frequenz 40MHz - das ist mehr als wir eigendlich brauchen,
         .flags = SPI_DEVICE_HALFDUPLEX,        // aber mit weniger gäbe es Probleme mit der Pixelsynchronisation
 	    .queue_size=1,
 #ifdef DEBUG
@@ -274,8 +273,7 @@ void setup_abg()
 	{
 	    .flags = SPI_TRANS_MODE_OCT,           // 8 Bit gleichzeitig einlesen. Es würde auch 4 reichen, aber dann wird die Auswertung langsamer und komplizierter
 	    .length = 0,                           // nix ausgeben...
-	    // .rxlength = 14350,//28720,                     // nur 28k Samples einlesen
-	    .rxlength = _SPI_RX_LENGTH,//28720,                     // nur 28k Samples einlesen
+	    .rxlength = 1000,                      // Platzhalter, wird später aus dem hsync-timing errechnet
 	    .rx_buffer = ABG_PIXBUF1,
 	};
 
@@ -395,14 +393,16 @@ void osd_task(void*)
 	while (1)
 	{
 		// Menü ausgeben
-		int l = snprintf(tb, 40, "Hallo!");
+		int l = snprintf(tb, 40, _MODE);
 		drawtext(tb,l,1,0x3f);
 		l = snprintf(tb, 40, "Pixel pro Zeile=%ld    ",ABG_PIXEL_PER_LINE);
-		drawtext(tb,l,10,cursor==0 ? 0x03 : 0x3f);
+		drawtext(tb,l,9,cursor==0 ? 0x03 : 0x3f);
 		l = snprintf(tb, 40, "Pixel Abstand=%ld    ",BSYNC_PIXEL_ABSTAND);
 		drawtext(tb,l,30,cursor==1 ? 0x03 : 0x3f);
 		l = snprintf(tb, 40, "Startzeile=%ld    ",ABG_START_LINE);
 		drawtext(tb,l,50,cursor==2 ? 0x03 : 0x3f);
+		l = snprintf(tb, 40, "Subpixel-Abst.=%f  ",ABG_PIXEL_START);
+		drawtext(tb,l,65,cursor==3 ? 0x03 : 0x3f);
 
 		// darauf warten, dass alle Tasten losgelassen werden
 		while (gpio_get_level(PIN_NUM_TAST_LEFT)==0 || gpio_get_level(PIN_NUM_TAST_UP)==0 || gpio_get_level(PIN_NUM_TAST_DOWN)==0 || gpio_get_level(PIN_NUM_TAST_RIGHT)==0)
@@ -410,24 +410,30 @@ void osd_task(void*)
 			usleep(10000);
 		}
 
+		int i = 500;
 		// darauf warten, dass eine Taste gedrückt wird
 		while (gpio_get_level(PIN_NUM_TAST_LEFT)!=0 && gpio_get_level(PIN_NUM_TAST_UP)!=0 && gpio_get_level(PIN_NUM_TAST_DOWN)!=0 && gpio_get_level(PIN_NUM_TAST_RIGHT)!=0)
 		{
 			usleep(10000);
+			if (i==1) // nach paar Sekunden Inaktivität das OSD verschwinden lassen
+			{
+				for (int h=0;h<20*640;h++) OSD_BUF[h]=0x0;
+			}
+			if (i>0 && ABG_RUN) i--;
 		}
 
 		// cursor nach rechts
 		if (gpio_get_level(PIN_NUM_TAST_LEFT)==0)
 		{
 			cursor--;
-			if (cursor==-1) cursor=2;
+			if (cursor==-1) cursor=3;
 		}
 
 		// cursor nach links
 		if (gpio_get_level(PIN_NUM_TAST_RIGHT)==0)
 		{
 			cursor++;
-			if (cursor==3) cursor=0;
+			if (cursor==4) cursor=0;
 		}
 
 		// wert erhöhen
@@ -444,6 +450,8 @@ void osd_task(void*)
 				case 2:
 					ABG_START_LINE++;
 					break;
+				case 3:
+					ABG_PIXEL_START+=0.1f;
 			}
 		}
 
@@ -461,6 +469,8 @@ void osd_task(void*)
 				case 2:
 					ABG_START_LINE--;
 					break;
+				case 3:
+					ABG_PIXEL_START-=0.1f;
 			}
 		}
 	}
@@ -505,6 +515,17 @@ void IRAM_ATTR app_main(void)
 					PIXEL_STEP_LIST[i] = ((int)step) - last;
 					last = (int)step;
 				}
+
+				// :200 Zeilen
+				// :240 MHz CPU-Takt
+				// *40 MHz Sample Rate
+				// *8 Bit per Sample
+				// = 150
+				int spi_len = (bsyn_clock_diff / 150) - 400;
+				REG_SET_FIELD(SPI_MS_DLEN_REG(2), SPI_MS_DATA_BITLEN, spi_len);
+				REG_SET_BIT(SPI_CMD_REG(2), SPI_UPDATE);
+
+				ABG_RUN = true;
 #ifdef PIN_NUM_DEBUG_COPY
 		gpio_set_level(PIN_NUM_DEBUG_COPY,0);
 #endif
@@ -517,6 +538,7 @@ void IRAM_ATTR app_main(void)
 				    VGA_BUF[b]=0;
 				}
 				a=100000;
+				ABG_RUN = false;
 			}
 			a--;
 		}
