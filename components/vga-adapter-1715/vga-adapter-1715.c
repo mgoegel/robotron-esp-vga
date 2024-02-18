@@ -9,6 +9,8 @@
 #include <soc/interrupt_core1_reg.h>
 #include <freertos/task.h>
 #include <xtensa/core-macros.h>
+#include "nvs_flash.h"
+#include "nvs.h"
 
 #define DEBUG 1
 
@@ -63,6 +65,28 @@ uint8_t COLORS[] = {0b00101010, 0b00010101, 0, 0b00111111};  // Farbdefinition
 #define _PIXEL_PER_LINE		864
 #endif
 
+// Deklaration der Modi
+
+// Aktives System
+static uint16_t ACTIVESYS = 0;
+
+// Systemnamen
+const char* SYSNAME[] = { "A7100", "PC1715" };
+
+// Mapping der "Farben"
+static uint8_t SYSCOLORS[][] = {
+	{0, 0b00000100, 0b00001000, 0b00001100}; // A7100
+	{0b00101010, 0b00010101, 0, 0b00111111}; // PC1715
+}
+
+// Initialisierte Daten aus dem NVS
+struct SYSMODE {
+	uint16_t mode;
+	float pixel_start;
+	uint16_t pixel_abstand;
+	uint16_t start_line;
+	uint16_t pixel_per_line;
+}
 
 // diese Definition scheint in den Header-Dateien von ESP zu fehlen!
 #define REG_SPI_BASE(i)     (DR_REG_SPI1_BASE + (((i)>1) ? (((i)* 0x1000) + 0x20000) : (((~(i)) & 1)* 0x1000 )))
@@ -75,6 +99,7 @@ volatile uint32_t BSYNC_PIXEL_ABSTAND = _BS_PIXEL_ABSTAND;
 volatile uint32_t ABG_START_LINE = _START_LINE;
 volatile double ABG_PIXEL_START = _PIXEL_START;
 volatile bool ABG_RUN = false;
+volatile uint32_t ABG_INT_DELAY = _INT_DELAY;
 
 int BSYNC_SUCHE_START = 0;
 uint8_t* PIXEL_STEP_LIST;
@@ -476,12 +501,26 @@ void osd_task(void*)
 	}
 }
 
+// NVS Partition initialisieren und Daten vom Flash laden, wenn vorhanden
+void setup_flash() {
+	// Initialize NVS
+    esp_err_t err = nvs_flash_init();
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        // NVS partition was truncated and needs to be erased
+        // Retry nvs_flash_init
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        err = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK( err );
+}
 
 // Hauptprogramm
 void IRAM_ATTR app_main(void)
 {
 	setup_vga();
 	setup_abg();
+	setup_flash();
+
 	xTaskCreatePinnedToCore(osd_task,"osd_task",6000,NULL,0,NULL,1);
 
 	volatile uint32_t* next = ABG_DMALIST;
