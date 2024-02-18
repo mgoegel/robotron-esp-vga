@@ -67,22 +67,41 @@ uint8_t COLORS[] = {0b00101010, 0b00010101, 0, 0b00111111};  // Farbdefinition
 
 // Deklaration der Modi
 
-// Systemnamen
-const char* SYSNAME[] = { "A7100", "PC1715" };
-
-// Mapping der "Farben"
-static uint8_t SYSCOLORS[][4] = {
-	{0, 0b00000100, 0b00001000, 0b00001100}, // A7100
-	{0b00101010, 0b00010101, 0, 0b00111111} // PC1715
+// Statische Struktur - Systemkonstanten
+struct SYSSTATIC {
+	char* name;
+	uint8_t colors[4];
+	uint16_t int_delay;
 };
 
-// Initialisierte Daten aus dem NVS
-struct SYSMODE {
+// Statische Werte vorinitialisiert
+const struct SYSSTATIC _STATIC_SYS_VALS[] = {
+	{ 
+		.name = "A7100",
+		.colors = {0, 0b00000100, 0b00001000, 0b00001100},
+		.int_delay = 1
+	},
+	{ 
+		.name = "PC1715",
+		.colors = {0b00101010, 0b00010101, 0, 0b00111111},
+		.int_delay = 6
+	}
+};
+
+// Modusstruktur - Systemvariablen, änderbar durch den Anwender
+struct SYSVARS {
 	uint16_t mode;
 	float pixel_start;
 	uint16_t pixel_abstand;
 	uint16_t start_line;
 	uint16_t pixel_per_line;
+};
+
+// Initialisierte Daten aus dem NVS - Werte, die durch den Anwender geändert werden können
+// Standardwerte für Modusinitialisierung nach Umschaltung des Modus
+const struct SYSVARS _DEFAULT_SYS_VARS[] = {
+	{.mode = 0, .pixel_start = 2.0f, .pixel_abstand = 1618, .start_line = 28, .pixel_per_line = 736}, // A7100
+	{.mode = 1, .pixel_start = 28.4f, .pixel_abstand = 2049, .start_line = 6, .pixel_per_line = 864} // PC1715
 };
 
 // diese Definition scheint in den Header-Dateien von ESP zu fehlen!
