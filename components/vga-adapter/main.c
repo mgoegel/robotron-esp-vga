@@ -67,9 +67,6 @@ uint8_t COLORS[] = {0b00101010, 0b00010101, 0, 0b00111111};  // Farbdefinition
 
 // Deklaration der Modi
 
-// Aktives System
-static uint16_t ACTIVESYS = 0;
-
 // Systemnamen
 const char* SYSNAME[] = { "A7100", "PC1715" };
 
@@ -92,6 +89,10 @@ struct SYSMODE {
 #define REG_SPI_BASE(i)     (DR_REG_SPI1_BASE + (((i)>1) ? (((i)* 0x1000) + 0x20000) : (((~(i)) & 1)* 0x1000 )))
 
 // globale Variablen
+
+// Aktives System
+static uint16_t ACTIVESYS = 0;
+
 volatile uint32_t* ABG_DMALIST;
 volatile uint32_t ABG_Scan_Line = 0;
 volatile uint32_t ABG_PIXEL_PER_LINE = _PIXEL_PER_LINE;
