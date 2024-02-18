@@ -55,12 +55,12 @@ uint8_t COLORS[] = {0, 0b00000100, 0b00001000, 0b00001100};  // Farbdefinition
 
 #elif ZIELTYP == PC1715
 #define _MODE "PC1715"
-#define _PIXEL_START 0.2f
+#define _PIXEL_START 28.4f
 uint8_t COLORS[] = {0b00101010, 0b00010101, 0, 0b00111111};  // Farbdefinition
-#define _BS_PIXEL_ABSTAND  	2050
-#define _START_LINE 		22
+#define _BS_PIXEL_ABSTAND  	2049
+#define _START_LINE 		6
 #define _INT_DELAY 			6
-#define _PIXEL_PER_LINE		736
+#define _PIXEL_PER_LINE		864
 #endif
 
 
