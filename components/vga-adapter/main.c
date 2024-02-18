@@ -74,10 +74,10 @@ static uint16_t ACTIVESYS = 0;
 const char* SYSNAME[] = { "A7100", "PC1715" };
 
 // Mapping der "Farben"
-static uint8_t SYSCOLORS[][] = {
-	{0, 0b00000100, 0b00001000, 0b00001100}; // A7100
-	{0b00101010, 0b00010101, 0, 0b00111111}; // PC1715
-}
+static uint8_t SYSCOLORS[][4] = {
+	{0, 0b00000100, 0b00001000, 0b00001100}, // A7100
+	{0b00101010, 0b00010101, 0, 0b00111111} // PC1715
+};
 
 // Initialisierte Daten aus dem NVS
 struct SYSMODE {
@@ -86,7 +86,7 @@ struct SYSMODE {
 	uint16_t pixel_abstand;
 	uint16_t start_line;
 	uint16_t pixel_per_line;
-}
+};
 
 // diese Definition scheint in den Header-Dateien von ESP zu fehlen!
 #define REG_SPI_BASE(i)     (DR_REG_SPI1_BASE + (((i)>1) ? (((i)* 0x1000) + 0x20000) : (((~(i)) & 1)* 0x1000 )))
