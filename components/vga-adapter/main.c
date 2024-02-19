@@ -110,7 +110,7 @@ const struct SYSVARS _DEFAULT_SYS_VARS[] = {
 // globale Variablen
 
 // Aktives System
-static uint16_t ACTIVESYS = 0;
+static uint16_t ACTIVESYS = ZIELTYP-1;
 
 volatile uint32_t* ABG_DMALIST;
 volatile uint32_t ABG_Scan_Line = 0;
@@ -248,7 +248,7 @@ static void drawtext(char* txt, int count, int pos, char color)
 // Interrupt: wird bei fallender Flanke von BSYN aufgerufen
 static void IRAM_ATTR abg_bsync_interrupt(void *args)
 {
-	usleep(_INT_DELAY);  // kurz warten. Je nachdem wie der ESP heute drauf ist, ist der kurze BSYN-Impuls noch nicht ganz vorbei
+	usleep(_STATIC_SYS_VALS[ACTIVESYS].int_delay);  // kurz warten. Je nachdem wie der ESP heute drauf ist, ist der kurze BSYN-Impuls noch nicht ganz vorbei
 	if (gpio_get_level(PIN_NUM_ABG_BSYNC2)!=0)
 	{
 		// CPU-Zyklen 0 stellen
@@ -418,6 +418,27 @@ void setup_vga()
     VGA_BUF = 20 * 640 + OSD_BUF;  // der Bereich für das eigendliche Bild beginnt erst ab Zeile 20
 }
 
+// NVS Partition initialisieren und Daten vom Flash laden, wenn vorhanden
+void setup_flash() {
+	// Initialize NVS
+    esp_err_t err = nvs_flash_init();
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        // NVS partition was truncated and needs to be erased
+        // Retry nvs_flash_init
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        err = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK( err );
+}
+
+// SYSTEM umschalten, Werte neu initialisieren
+void switch_system() {
+	BSYNC_PIXEL_ABSTAND = _DEFAULT_SYS_VARS[ACTIVESYS].pixel_abstand;
+	ABG_PIXEL_PER_LINE = _DEFAULT_SYS_VARS[ACTIVESYS].pixel_per_line;
+	ABG_PIXEL_START = _DEFAULT_SYS_VARS[ACTIVESYS].pixel_start;
+	ABG_START_LINE = _DEFAULT_SYS_VARS[ACTIVESYS].start_line;
+}
+
 // das OSD-Menue
 void osd_task(void*)
 {
@@ -438,8 +459,9 @@ void osd_task(void*)
 	while (1)
 	{
 		// Menü ausgeben
-		int l = snprintf(tb, 40, _MODE);
-		drawtext(tb,l,1,0x3f);
+		int l = snprintf(tb, 40, _STATIC_SYS_VALS[ACTIVESYS].name);
+		// drawtext(tb,l,1,0x3f);
+		drawtext(tb,l,1,cursor==4 ? 0x03 : 0x3f);
 		l = snprintf(tb, 40, "Pixel pro Zeile=%ld    ",ABG_PIXEL_PER_LINE);
 		drawtext(tb,l,9,cursor==0 ? 0x03 : 0x3f);
 		l = snprintf(tb, 40, "Pixel Abstand=%ld    ",BSYNC_PIXEL_ABSTAND);
@@ -471,14 +493,14 @@ void osd_task(void*)
 		if (gpio_get_level(PIN_NUM_TAST_LEFT)==0)
 		{
 			cursor--;
-			if (cursor==-1) cursor=3;
+			if (cursor==-1) cursor=4;
 		}
 
 		// cursor nach links
 		if (gpio_get_level(PIN_NUM_TAST_RIGHT)==0)
 		{
 			cursor++;
-			if (cursor==4) cursor=0;
+			if (cursor==5) cursor=0;
 		}
 
 		// wert erhöhen
@@ -497,6 +519,15 @@ void osd_task(void*)
 					break;
 				case 3:
 					ABG_PIXEL_START+=0.1f;
+					break;
+				case 4:
+					if (ACTIVESYS < 1)
+					{
+						ACTIVESYS++;
+						switch_system();
+					}
+					break;
+
 			}
 		}
 
@@ -516,22 +547,17 @@ void osd_task(void*)
 					break;
 				case 3:
 					ABG_PIXEL_START-=0.1f;
+					break;
+				case 4:
+					if (ACTIVESYS > 0)
+					{
+						ACTIVESYS--;
+						switch_system();
+					}
+					break;
 			}
 		}
 	}
-}
-
-// NVS Partition initialisieren und Daten vom Flash laden, wenn vorhanden
-void setup_flash() {
-	// Initialize NVS
-    esp_err_t err = nvs_flash_init();
-    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        // NVS partition was truncated and needs to be erased
-        // Retry nvs_flash_init
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        err = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK( err );
 }
 
 // Hauptprogramm
@@ -635,7 +661,8 @@ void IRAM_ATTR app_main(void)
 
 			for (int i=0;i<640;i++)
 			{
-				*vgapos = COLORS[(*bufpos) & 3];
+				// *vgapos = COLORS[(*bufpos) & 3];
+				*vgapos = _STATIC_SYS_VALS[ACTIVESYS].colors[(*bufpos) & 3];
 				vgapos++;
 				bufpos+=PIXEL_STEP_LIST[i];
 			}
