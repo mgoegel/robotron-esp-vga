@@ -11,6 +11,7 @@
 #include <xtensa/core-macros.h>
 #include "nvs_flash.h"
 #include "nvs.h"
+#include <math.h>
 
 #define DEBUG 1
 
@@ -45,26 +46,6 @@
 
 #define ZIELTYP PC1715
 
-// Konstanten
-#if ZIELTYP == A7100
-#define _MODE "A7100"
-#define _PIXEL_START 2.0f
-uint8_t COLORS[] = {0, 0b00000100, 0b00001000, 0b00001100};  // Farbdefinition
-#define _BS_PIXEL_ABSTAND  	1618
-#define _START_LINE 		28
-#define _INT_DELAY 			1
-#define _PIXEL_PER_LINE		736
-
-#elif ZIELTYP == PC1715
-#define _MODE "PC1715"
-#define _PIXEL_START 28.4f
-uint8_t COLORS[] = {0b00101010, 0b00010101, 0, 0b00111111};  // Farbdefinition
-#define _BS_PIXEL_ABSTAND  	2049
-#define _START_LINE 		6
-#define _INT_DELAY 			6
-#define _PIXEL_PER_LINE		864
-#endif
-
 // Deklaration der Modi
 
 // Statische Struktur - Systemkonstanten
@@ -77,7 +58,7 @@ struct SYSSTATIC {
 // Statische Werte vorinitialisiert
 const struct SYSSTATIC _STATIC_SYS_VALS[] = {
 	{ 
-		.name = "A7100",
+		.name = "A7100 ",
 		.colors = {0, 0b00000100, 0b00001000, 0b00001100},
 		.int_delay = 1
 	},
@@ -91,17 +72,16 @@ const struct SYSSTATIC _STATIC_SYS_VALS[] = {
 // Modusstruktur - Systemvariablen, änderbar durch den Anwender
 struct SYSVARS {
 	uint16_t mode;
-	float pixel_start;
-	uint16_t pixel_abstand;
+	float pixel_abstand;
 	uint16_t start_line;
-	uint16_t pixel_per_line;
+	float pixel_per_line;
 };
 
 // Initialisierte Daten aus dem NVS - Werte, die durch den Anwender geändert werden können
 // Standardwerte für Modusinitialisierung nach Umschaltung des Modus
 const struct SYSVARS _DEFAULT_SYS_VARS[] = {
-	{.mode = 0, .pixel_start = 2.0f, .pixel_abstand = 1618, .start_line = 28, .pixel_per_line = 736}, // A7100
-	{.mode = 1, .pixel_start = 28.4f, .pixel_abstand = 2049, .start_line = 6, .pixel_per_line = 864} // PC1715
+	{.mode = 0, .pixel_abstand = 89.86f, .start_line = 29, .pixel_per_line = 736}, // A7100
+	{.mode = 1, .pixel_abstand = 100.0f /* <-- Wert neu ausprobieren! */, .start_line = 6, .pixel_per_line = 864} // PC1715
 };
 
 // diese Definition scheint in den Header-Dateien von ESP zu fehlen!
@@ -114,12 +94,11 @@ static uint16_t ACTIVESYS = ZIELTYP-1;
 
 volatile uint32_t* ABG_DMALIST;
 volatile uint32_t ABG_Scan_Line = 0;
-volatile uint32_t ABG_PIXEL_PER_LINE = _PIXEL_PER_LINE;
-volatile uint32_t BSYNC_PIXEL_ABSTAND = _BS_PIXEL_ABSTAND;
-volatile uint32_t ABG_START_LINE = _START_LINE;
-volatile double ABG_PIXEL_START = _PIXEL_START;
+volatile double ABG_PIXEL_PER_LINE;
+volatile double BSYNC_PIXEL_ABSTAND;
+volatile uint32_t ABG_START_LINE;
 volatile bool ABG_RUN = false;
-volatile uint32_t ABG_INT_DELAY = _INT_DELAY;
+volatile uint32_t ABG_INT_DELAY;
 
 int BSYNC_SUCHE_START = 0;
 uint8_t* PIXEL_STEP_LIST;
@@ -127,6 +106,7 @@ uint8_t* VGA_BUF;
 uint8_t* OSD_BUF;
 volatile uint32_t bsyn_clock_diff = 0;
 volatile uint32_t bsyn_clock_last = 0;
+volatile uint32_t BSYNC_SAMPLE_ABSTAND = 0;
 
 // Zeichensatz für das OSD-Textfeld
 unsigned char CHARSET[] =
@@ -263,13 +243,23 @@ static void IRAM_ATTR abg_bsync_interrupt(void *args)
 			bsyn_clock_diff = XTHAL_GET_CCOUNT();
 		}
 
+		ABG_Scan_Line++;
+
 		// bsync Impuls ist vorbei - war ein VSYNC
 		if (ABG_Scan_Line > ABG_START_LINE && ABG_RUN)
 		{
+			if ((ABG_DMALIST[0] & 0x80000000) != 0)
+			{
+				ABG_DMALIST[3] = ABG_Scan_Line;
+			}
+			if ((ABG_DMALIST[4] & 0x80000000) != 0)
+			{
+				ABG_DMALIST[7] = ABG_Scan_Line;
+			}
 		    REG_SET_BIT(GDMA_IN_LINK_CH1_REG, GDMA_INLINK_RESTART_CH1);  // das bewirkt, dass der DMA-Kontroller die Address-Tabelle neu einliest
 		    REG_SET_BIT(SPI_CMD_REG(2), SPI_USR);                        // neuen SPI-Transfer starten - die Parameter sind ja schon drin
+
 		}
-		ABG_Scan_Line++;
 	}
 	else
 	{
@@ -284,7 +274,7 @@ void setup_abg()
 	// Buffer holen
 	uint8_t* ABG_PIXBUF1 = heap_caps_malloc(4096, MALLOC_CAP_DMA | MALLOC_CAP_32BIT | MALLOC_CAP_INTERNAL);
 	uint8_t* ABG_PIXBUF2 = heap_caps_malloc(4096, MALLOC_CAP_DMA | MALLOC_CAP_32BIT | MALLOC_CAP_INTERNAL);
-	ABG_DMALIST = heap_caps_malloc(24, MALLOC_CAP_DMA | MALLOC_CAP_32BIT | MALLOC_CAP_INTERNAL);
+	ABG_DMALIST = heap_caps_malloc(32, MALLOC_CAP_DMA | MALLOC_CAP_32BIT | MALLOC_CAP_INTERNAL);
 	PIXEL_STEP_LIST = heap_caps_malloc(640, MALLOC_CAP_DMA | MALLOC_CAP_32BIT | MALLOC_CAP_INTERNAL);
 
 	// Pin-Konfiguration
@@ -328,10 +318,10 @@ void setup_abg()
 	// Aus dieser Tabelle nimmt der DMA-Kontroller die Speicheraddressen
 	ABG_DMALIST[0] = 0x80ffffff;
 	ABG_DMALIST[1] = (int)ABG_PIXBUF1;
-	ABG_DMALIST[2] = (int)&ABG_DMALIST[3];
-	ABG_DMALIST[3] = 0x80ffffff;
-	ABG_DMALIST[4] = (int)ABG_PIXBUF2;
-	ABG_DMALIST[5] = (int)&ABG_DMALIST[0];
+	ABG_DMALIST[2] = (int)&ABG_DMALIST[4];
+	ABG_DMALIST[4] = 0x80ffffff;
+	ABG_DMALIST[5] = (int)ABG_PIXBUF2;
+	ABG_DMALIST[6] = (int)&ABG_DMALIST[0];
 
 	// normalerweise nimmt der SPI-Kontroller bei diesem Projekt den DMA-Kanal 1. Sicher sein kann man sich da nicht - also überprüfen.
 	assert(REG_READ(GDMA_IN_PERI_SEL_CH1_REG) == 0);
@@ -435,12 +425,11 @@ void setup_flash() {
 void switch_system() {
 	BSYNC_PIXEL_ABSTAND = _DEFAULT_SYS_VARS[ACTIVESYS].pixel_abstand;
 	ABG_PIXEL_PER_LINE = _DEFAULT_SYS_VARS[ACTIVESYS].pixel_per_line;
-	ABG_PIXEL_START = _DEFAULT_SYS_VARS[ACTIVESYS].pixel_start;
 	ABG_START_LINE = _DEFAULT_SYS_VARS[ACTIVESYS].start_line;
 }
 
 // das OSD-Menue
-void osd_task(void*)
+void IRAM_ATTR osd_task(void*)
 {
 	// Taster-Pins einstellen
 	gpio_config_t pincfg =
@@ -456,25 +445,30 @@ void osd_task(void*)
 	int cursor = 0;
 	for (int h=0;h<20*640;h++) OSD_BUF[h]=0x0;
 
+	int j = 0;
+
 	while (1)
 	{
 		// Menü ausgeben
 		int l = snprintf(tb, 40, _STATIC_SYS_VALS[ACTIVESYS].name);
-		// drawtext(tb,l,1,0x3f);
-		drawtext(tb,l,1,cursor==4 ? 0x03 : 0x3f);
-		l = snprintf(tb, 40, "Pixel pro Zeile=%ld    ",ABG_PIXEL_PER_LINE);
-		drawtext(tb,l,9,cursor==0 ? 0x03 : 0x3f);
-		l = snprintf(tb, 40, "Pixel Abstand=%ld    ",BSYNC_PIXEL_ABSTAND);
-		drawtext(tb,l,30,cursor==1 ? 0x03 : 0x3f);
+		drawtext(tb,l,1,cursor==0 ? 0x03 : 0x3f);
+		l = snprintf(tb, 40, "Pixel pro Zeile=%.1f    ",ABG_PIXEL_PER_LINE);
+		drawtext(tb,l,9,cursor==1 ? 0x03 : 0x3f);
+		l = snprintf(tb, 40, "Pixel Abstand=%.2f    ",BSYNC_PIXEL_ABSTAND);
+		drawtext(tb,l,32,cursor==2 ? 0x03 : 0x3f);
 		l = snprintf(tb, 40, "Startzeile=%ld    ",ABG_START_LINE);
-		drawtext(tb,l,50,cursor==2 ? 0x03 : 0x3f);
-		l = snprintf(tb, 40, "Subpixel-Abst.=%f  ",ABG_PIXEL_START);
-		drawtext(tb,l,65,cursor==3 ? 0x03 : 0x3f);
+		drawtext(tb,l,57,cursor==3 ? 0x03 : 0x3f);
 
 		// darauf warten, dass alle Tasten losgelassen werden
 		while (gpio_get_level(PIN_NUM_TAST_LEFT)==0 || gpio_get_level(PIN_NUM_TAST_UP)==0 || gpio_get_level(PIN_NUM_TAST_DOWN)==0 || gpio_get_level(PIN_NUM_TAST_RIGHT)==0)
 		{
 			usleep(10000);
+			if (j<=0)
+			{
+				j = 5;
+				break;
+			}
+			j--;
 		}
 
 		int i = 500;
@@ -487,20 +481,21 @@ void osd_task(void*)
 				for (int h=0;h<20*640;h++) OSD_BUF[h]=0x0;
 			}
 			if (i>0 && ABG_RUN) i--;
+			j = 50;
 		}
 
 		// cursor nach rechts
 		if (gpio_get_level(PIN_NUM_TAST_LEFT)==0)
 		{
 			cursor--;
-			if (cursor==-1) cursor=4;
+			if (cursor==-1) cursor=3;
 		}
 
 		// cursor nach links
 		if (gpio_get_level(PIN_NUM_TAST_RIGHT)==0)
 		{
 			cursor++;
-			if (cursor==5) cursor=0;
+			if (cursor==4) cursor=0;
 		}
 
 		// wert erhöhen
@@ -509,23 +504,20 @@ void osd_task(void*)
 			switch (cursor)
 			{
 				case 0:
-					ABG_PIXEL_PER_LINE++;
-					break;
-				case 1:
-					BSYNC_PIXEL_ABSTAND++;
-					break;
-				case 2:
-					ABG_START_LINE++;
-					break;
-				case 3:
-					ABG_PIXEL_START+=0.1f;
-					break;
-				case 4:
 					if (ACTIVESYS < 1)
 					{
 						ACTIVESYS++;
 						switch_system();
 					}
+					break;
+				case 1:
+					ABG_PIXEL_PER_LINE+= (j==5) ? 1.0f : 0.1f;
+					break;
+				case 2:
+					BSYNC_PIXEL_ABSTAND+= (j==5) ? 1.0f : 0.02f;
+					break;
+				case 3:
+					ABG_START_LINE++;
 					break;
 
 			}
@@ -537,23 +529,20 @@ void osd_task(void*)
 			switch (cursor)
 			{
 				case 0:
-					ABG_PIXEL_PER_LINE--;
-					break;
-				case 1:
-					BSYNC_PIXEL_ABSTAND--;
-					break;
-				case 2:
-					ABG_START_LINE--;
-					break;
-				case 3:
-					ABG_PIXEL_START-=0.1f;
-					break;
-				case 4:
 					if (ACTIVESYS > 0)
 					{
 						ACTIVESYS--;
 						switch_system();
 					}
+					break;
+				case 1:
+					ABG_PIXEL_PER_LINE-= (j==5) ? 1.0f : 0.1f;
+					break;
+				case 2:
+					BSYNC_PIXEL_ABSTAND-= (j==5) ? 1.0f : 0.02f;
+					break;
+				case 3:
+					ABG_START_LINE--;
 					break;
 			}
 		}
@@ -566,6 +555,7 @@ void IRAM_ATTR app_main(void)
 	setup_vga();
 	setup_abg();
 	setup_flash();
+	switch_system();
 
 	xTaskCreatePinnedToCore(osd_task,"osd_task",6000,NULL,0,NULL,1);
 
@@ -577,7 +567,7 @@ void IRAM_ATTR app_main(void)
 		gpio_set_level(PIN_NUM_DEBUG_COPY,0);
 #endif
 
-		int a=100000;
+		int a=1000000;
 		while ((next[0] & 0x80000000) != 0)  // darauf warten, dass der DMA-Kontroller den Transfer in den Puffer fertig meldet - der löscht das höchste Bit
 		{
 			if (bsyn_clock_last != bsyn_clock_diff && ABG_Scan_Line == 0)
@@ -592,13 +582,17 @@ void IRAM_ATTR app_main(void)
 #endif
 				bsyn_clock_last = bsyn_clock_diff;
 				double weite = bsyn_clock_diff / (1200.0f * ABG_PIXEL_PER_LINE);
-				double step = ABG_PIXEL_START;
-				int last = (int)step;
+				double abst = 0.0f;
+				double step = modf((weite * ((double)(ABG_PIXEL_PER_LINE - BSYNC_PIXEL_ABSTAND))), &abst);
+				BSYNC_SAMPLE_ABSTAND = (int)abst;
+				int istep = round(step); 
+				int last = istep;
 				for (int i=0;i<640;i++)
 				{
 					step += weite;
-					PIXEL_STEP_LIST[i] = ((int)step) - last;
-					last = (int)step;
+					istep = round(step);
+					PIXEL_STEP_LIST[i] = istep - last;
+					last = istep;
 				}
 
 				// :200 Zeilen
@@ -609,7 +603,6 @@ void IRAM_ATTR app_main(void)
 				int spi_len = (bsyn_clock_diff / 150) - 400;
 				REG_SET_FIELD(SPI_MS_DLEN_REG(2), SPI_MS_DATA_BITLEN, spi_len);
 				REG_SET_BIT(SPI_CMD_REG(2), SPI_UPDATE);
-
 				ABG_RUN = true;
 #ifdef PIN_NUM_DEBUG_COPY
 		gpio_set_level(PIN_NUM_DEBUG_COPY,0);
@@ -622,7 +615,7 @@ void IRAM_ATTR app_main(void)
 				{
 				    VGA_BUF[b]=0;
 				}
-				a=100000;
+				a=1000000;
 				ABG_RUN = false;
 			}
 			a--;
@@ -639,7 +632,7 @@ void IRAM_ATTR app_main(void)
 
 		if ((buf[BSYNC_SUCHE_START] & 0x04)!=0x04)
 		{
-			BSYNC_SUCHE_START = BSYNC_PIXEL_ABSTAND+1;
+			BSYNC_SUCHE_START = BSYNC_SAMPLE_ABSTAND+1;
 		}
 
 		// Wir suchen den nächsten BSYNC-Impuls
@@ -653,12 +646,13 @@ void IRAM_ATTR app_main(void)
 			}
 		}
 
-		// und nun die Pixel in den VGA-Puffer kopieren
-		if (sync>0 && ABG_Scan_Line>=ABG_START_LINE && ABG_Scan_Line<=ABG_START_LINE+400)
-		{
-			uint8_t* bufpos = (uint8_t*)((sync - BSYNC_PIXEL_ABSTAND) + (int)buf);
-			uint8_t* vgapos = (uint8_t*)((ABG_Scan_Line-(ABG_START_LINE+2))*640 + (int)VGA_BUF);
+		uint32_t line = next[3];
 
+		// und nun die Pixel in den VGA-Puffer kopieren
+		if (sync>0 && line>=ABG_START_LINE && line<=ABG_START_LINE+399)
+		{
+			uint8_t* bufpos = (uint8_t*)((sync - BSYNC_SAMPLE_ABSTAND) + (int)buf);
+			uint8_t* vgapos = (uint8_t*)((line - ABG_START_LINE)*640 + (int)VGA_BUF);
 			for (int i=0;i<640;i++)
 			{
 				// *vgapos = COLORS[(*bufpos) & 3];
@@ -669,7 +663,7 @@ void IRAM_ATTR app_main(void)
 		}
 		else
 		{
-			BSYNC_SUCHE_START = BSYNC_PIXEL_ABSTAND+1;
+			BSYNC_SUCHE_START = BSYNC_SAMPLE_ABSTAND+1;
 		}
 
 		// Puffer wieder für den DMA-Kontroller freigeben
