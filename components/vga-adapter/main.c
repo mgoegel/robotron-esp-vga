@@ -81,7 +81,7 @@ struct SYSVARS {
 // Standardwerte für Modusinitialisierung nach Umschaltung des Modus
 const struct SYSVARS _DEFAULT_SYS_VARS[] = {
 	{.mode = 0, .pixel_abstand = 89.86f, .start_line = 29, .pixel_per_line = 736}, // A7100
-	{.mode = 1, .pixel_abstand = 100.0f /* <-- Wert neu ausprobieren! */, .start_line = 6, .pixel_per_line = 864} // PC1715
+	{.mode = 1, .pixel_abstand = 154.40f, .start_line = 6, .pixel_per_line = 864.1} // PC1715
 };
 
 // diese Definition scheint in den Header-Dateien von ESP zu fehlen!
