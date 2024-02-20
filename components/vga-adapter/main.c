@@ -64,7 +64,7 @@ const struct SYSSTATIC _STATIC_SYS_VALS[] = {
 	},
 	{ 
 		.name = "PC1715",
-		.colors = {0b00101010, 0b00010101, 0, 0b00111111},
+		.colors = {0b00001000, 0b00000100, 0, 0b00001100}, // 0b--rrggbb
 		.int_delay = 6
 	}
 };
@@ -81,7 +81,7 @@ struct SYSVARS {
 // Standardwerte für Modusinitialisierung nach Umschaltung des Modus
 const struct SYSVARS _DEFAULT_SYS_VARS[] = {
 	{.mode = 0, .pixel_abstand = 89.86f, .start_line = 29, .pixel_per_line = 736}, // A7100
-	{.mode = 1, .pixel_abstand = 154.40f, .start_line = 6, .pixel_per_line = 864.1} // PC1715
+	{.mode = 1, .pixel_abstand = 154.40f /* schwankt bis auf 155.88 */, .start_line = 6, .pixel_per_line = 864.1} // PC1715
 };
 
 // diese Definition scheint in den Header-Dateien von ESP zu fehlen!
