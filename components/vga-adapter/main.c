@@ -73,7 +73,7 @@ const struct SYSSTATIC _STATIC_SYS_VALS[] = {
 struct SYSVARS {
 	uint16_t mode;
 	float pixel_abstand;
-	uint16_t start_line;
+	uint32_t start_line;
 	float pixel_per_line;
 };
 
@@ -84,13 +84,23 @@ const struct SYSVARS _DEFAULT_SYS_VARS[] = {
 	{.mode = 1, .pixel_abstand = 154.40f /* schwankt bis auf 155.88 */, .start_line = 6, .pixel_per_line = 864.1} // PC1715
 };
 
+// Bezeichner für NVS KEY - max 15 Zeichen!
+#define _NVS_SETTING_MODE	"SMODE"
+#define _NVS_SETTING_PIXEL_ABSTAND "SPIXABST"
+#define _NVS_SETTING_START_LINE	"SSTARTLINE"
+#define _NVS_SETTING_PIXEL_PER_LINE "SPIXPERLINE"
+
+
 // diese Definition scheint in den Header-Dateien von ESP zu fehlen!
-#define REG_SPI_BASE(i)     (DR_REG_SPI1_BASE + (((i)>1) ? (((i)* 0x1000) + 0x20000) : (((~(i)) & 1)* 0x1000 )))
+// Definition ab IDF 5.2 verfügbar!
+//#define REG_SPI_BASE(i)     (DR_REG_SPI1_BASE + (((i)>1) ? (((i)* 0x1000) + 0x20000) : (((~(i)) & 1)* 0x1000 )))
 
 // globale Variablen
 
 // Aktives System
 static uint16_t ACTIVESYS = ZIELTYP-1;
+
+nvs_handle_t sys_nvs_handle;
 
 volatile uint32_t* ABG_DMALIST;
 volatile uint32_t ABG_Scan_Line = 0;
@@ -419,6 +429,83 @@ void setup_flash() {
         err = nvs_flash_init();
     }
     ESP_ERROR_CHECK( err );
+
+	printf("\n");
+    printf("Öffne NVS handle... ");
+
+	err = nvs_open("storage", NVS_READWRITE, &sys_nvs_handle);
+    if (err != ESP_OK) {
+        printf("Fehler (%s) beim öffnen des NVS handle!\n", esp_err_to_name(err));
+    } else {
+		 printf("Erledigt\n");
+	}
+}
+
+// Einstellungen vom Flash laden
+bool restore_settings() {
+	if (sys_nvs_handle == 0)
+		return false;
+
+	// Read
+	printf("Lese Einstellungen vom Flash ... ");
+
+	int16_t nvs_mode = -1;
+	uint32_t nvs_pixel_abstand = 0;
+	uint32_t nvs_start_line = 0;
+	uint32_t nvs_pixel_per_line = 0;
+
+	esp_err_t err;
+	bool valid_settings = true;
+
+	err = nvs_get_i16(sys_nvs_handle, _NVS_SETTING_MODE, &nvs_mode);
+	if (err != ESP_OK) valid_settings = false;
+	err = nvs_get_u32(sys_nvs_handle, _NVS_SETTING_PIXEL_ABSTAND, &nvs_pixel_abstand);
+	if (err != ESP_OK) valid_settings = false;
+	err = nvs_get_u32(sys_nvs_handle, _NVS_SETTING_START_LINE, &nvs_start_line);
+	if (err != ESP_OK) valid_settings = false;
+	err = nvs_get_u32(sys_nvs_handle, _NVS_SETTING_PIXEL_PER_LINE, &nvs_pixel_per_line);
+	if (err != ESP_OK) valid_settings = false;
+
+	if (!valid_settings) {
+		printf("Einstellungen nicht wiederhergestellt.");
+		return false;
+	}
+	printf("Einstellungen geladen. Zuweisung...");
+	ACTIVESYS = nvs_mode;
+	BSYNC_PIXEL_ABSTAND = (float)(nvs_pixel_abstand / 100);
+	ABG_START_LINE = nvs_start_line;
+	ABG_PIXEL_PER_LINE = (float)(nvs_pixel_per_line / 100);
+	printf("Zuweisung erledigt (%d, %f, %ld, %f)", ACTIVESYS, BSYNC_PIXEL_ABSTAND, ABG_START_LINE, ABG_PIXEL_PER_LINE);
+	return true;
+}
+
+// Einstellungen im Flash sichern
+bool write_settings() {
+	if (sys_nvs_handle == 0)
+		return false;
+
+	int16_t nvs_mode = ACTIVESYS;
+	uint32_t nvs_pixel_abstand = (int)(BSYNC_PIXEL_ABSTAND * 100);
+	uint32_t nvs_start_line = ABG_START_LINE;
+	uint32_t nvs_pixel_per_line = (int)(ABG_PIXEL_PER_LINE * 100);
+
+	esp_err_t err;
+	bool valid_settings = true;
+	err = nvs_set_i16(sys_nvs_handle, _NVS_SETTING_MODE, nvs_mode);
+	if (err != ESP_OK) valid_settings = false;
+	err = nvs_set_u32(sys_nvs_handle, _NVS_SETTING_PIXEL_ABSTAND, nvs_pixel_abstand);
+	if (err != ESP_OK) valid_settings = false;
+	err = nvs_set_u32(sys_nvs_handle, _NVS_SETTING_START_LINE, nvs_start_line);
+	if (err != ESP_OK) valid_settings = false;
+	err = nvs_set_u32(sys_nvs_handle, _NVS_SETTING_PIXEL_PER_LINE, nvs_pixel_per_line);
+	if (err != ESP_OK) valid_settings = false;
+
+	if (!valid_settings) {
+		printf("Einstellungen nicht gespeichert.");
+		return false;
+	}
+	printf("Einstellungen gespeichert.");
+	return true;
 }
 
 // SYSTEM umschalten, Werte neu initialisieren
@@ -446,18 +533,26 @@ void IRAM_ATTR osd_task(void*)
 	for (int h=0;h<20*640;h++) OSD_BUF[h]=0x0;
 
 	int j = 0;
+	bool nvs_saved = false;
 
 	while (1)
 	{
 		// Menü ausgeben
 		int l = snprintf(tb, 40, _STATIC_SYS_VALS[ACTIVESYS].name);
 		drawtext(tb,l,1,cursor==0 ? 0x03 : 0x3f);
-		l = snprintf(tb, 40, "Pixel pro Zeile=%.1f    ",ABG_PIXEL_PER_LINE);
-		drawtext(tb,l,9,cursor==1 ? 0x03 : 0x3f);
-		l = snprintf(tb, 40, "Pixel Abstand=%.2f    ",BSYNC_PIXEL_ABSTAND);
-		drawtext(tb,l,32,cursor==2 ? 0x03 : 0x3f);
-		l = snprintf(tb, 40, "Startzeile=%ld    ",ABG_START_LINE);
-		drawtext(tb,l,57,cursor==3 ? 0x03 : 0x3f);
+		if (cursor < 4) {
+			l = snprintf(tb, 40, "Pixel pro Zeile=%.1f    ",ABG_PIXEL_PER_LINE);
+			drawtext(tb,l,9,cursor==1 ? 0x03 : 0x3f);
+			l = snprintf(tb, 40, "Pixel Abstand=%.2f    ",BSYNC_PIXEL_ABSTAND);
+			drawtext(tb,l,32,cursor==2 ? 0x03 : 0x3f);
+			l = snprintf(tb, 40, "Startzeile=%ld    ",ABG_START_LINE);
+			drawtext(tb,l,57,cursor==3 ? 0x03 : 0x3f);
+		} else if (cursor > 3)
+		{
+			l = snprintf(tb, 40, "Einstellungen sichern ^/laden v");
+			drawtext(tb,l,9,cursor==4 ? 0x03 : 0x3f);
+		}
+		
 
 		// darauf warten, dass alle Tasten losgelassen werden
 		while (gpio_get_level(PIN_NUM_TAST_LEFT)==0 || gpio_get_level(PIN_NUM_TAST_UP)==0 || gpio_get_level(PIN_NUM_TAST_DOWN)==0 || gpio_get_level(PIN_NUM_TAST_RIGHT)==0)
@@ -488,14 +583,14 @@ void IRAM_ATTR osd_task(void*)
 		if (gpio_get_level(PIN_NUM_TAST_LEFT)==0)
 		{
 			cursor--;
-			if (cursor==-1) cursor=3;
+			if (cursor==-1) cursor=4;
 		}
 
 		// cursor nach links
 		if (gpio_get_level(PIN_NUM_TAST_RIGHT)==0)
 		{
 			cursor++;
-			if (cursor==4) cursor=0;
+			if (cursor==5) cursor=0;
 		}
 
 		// wert erhöhen
@@ -508,16 +603,24 @@ void IRAM_ATTR osd_task(void*)
 					{
 						ACTIVESYS++;
 						switch_system();
+						nvs_saved = false;
 					}
 					break;
 				case 1:
 					ABG_PIXEL_PER_LINE+= (j==5) ? 1.0f : 0.1f;
+					nvs_saved = false;
 					break;
 				case 2:
 					BSYNC_PIXEL_ABSTAND+= (j==5) ? 1.0f : 0.02f;
+					nvs_saved = false;
 					break;
 				case 3:
 					ABG_START_LINE++;
+					nvs_saved = false;
+					break;
+				case 4:
+					if (!nvs_saved) // Sicherung gegen unnötiges schreiben
+						nvs_saved = write_settings();
 					break;
 
 			}
@@ -533,16 +636,23 @@ void IRAM_ATTR osd_task(void*)
 					{
 						ACTIVESYS--;
 						switch_system();
+						nvs_saved = false;
 					}
 					break;
 				case 1:
 					ABG_PIXEL_PER_LINE-= (j==5) ? 1.0f : 0.1f;
+					nvs_saved = false;
 					break;
 				case 2:
 					BSYNC_PIXEL_ABSTAND-= (j==5) ? 1.0f : 0.02f;
+					nvs_saved = false;
 					break;
 				case 3:
 					ABG_START_LINE--;
+					nvs_saved = false;
+					break;
+				case 4:
+					nvs_saved = restore_settings();
 					break;
 			}
 		}
@@ -555,7 +665,10 @@ void IRAM_ATTR app_main(void)
 	setup_vga();
 	setup_abg();
 	setup_flash();
+	// Standardwerte initialisieren
 	switch_system();
+	// NVS Einstellungen laden, wenn vorhanden
+	restore_settings();
 
 	xTaskCreatePinnedToCore(osd_task,"osd_task",6000,NULL,0,NULL,1);
 
