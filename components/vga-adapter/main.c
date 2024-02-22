@@ -81,7 +81,7 @@ struct SYSVARS {
 // Standardwerte für Modusinitialisierung nach Umschaltung des Modus
 const struct SYSVARS _DEFAULT_SYS_VARS[] = {
 	{.mode = 0, .pixel_abstand = 89.86f, .start_line = 29, .pixel_per_line = 736}, // A7100
-	{.mode = 1, .pixel_abstand = 154.40f /* schwankt bis auf 155.88 */, .start_line = 6, .pixel_per_line = 864.1} // PC1715
+	{.mode = 1, .pixel_abstand = 155.67f /* schwankt bis auf 155.88 */, .start_line = 6, .pixel_per_line = 864.1} // PC1715
 };
 
 // Bezeichner für NVS KEY - max 15 Zeichen!
@@ -472,9 +472,9 @@ bool restore_settings() {
 	}
 	printf("Einstellungen geladen. Zuweisung...");
 	ACTIVESYS = nvs_mode;
-	BSYNC_PIXEL_ABSTAND = (float)(nvs_pixel_abstand / 100);
+	BSYNC_PIXEL_ABSTAND = (float)nvs_pixel_abstand / 100;
 	ABG_START_LINE = nvs_start_line;
-	ABG_PIXEL_PER_LINE = (float)(nvs_pixel_per_line / 100);
+	ABG_PIXEL_PER_LINE = (float)nvs_pixel_per_line / 100;
 	printf("Zuweisung erledigt (%d, %f, %ld, %f)", ACTIVESYS, BSYNC_PIXEL_ABSTAND, ABG_START_LINE, ABG_PIXEL_PER_LINE);
 	return true;
 }
@@ -549,7 +549,7 @@ void IRAM_ATTR osd_task(void*)
 			drawtext(tb,l,57,cursor==3 ? 0x03 : 0x3f);
 		} else if (cursor > 3)
 		{
-			l = snprintf(tb, 40, "Einstellungen sichern ^/laden v");
+			l = snprintf(tb, 40, "Einstellungen sichern ^/laden v        ");
 			drawtext(tb,l,9,cursor==4 ? 0x03 : 0x3f);
 		}
 		
@@ -611,7 +611,7 @@ void IRAM_ATTR osd_task(void*)
 					nvs_saved = false;
 					break;
 				case 2:
-					BSYNC_PIXEL_ABSTAND+= (j==5) ? 1.0f : 0.02f;
+					BSYNC_PIXEL_ABSTAND+= (j==5) ? 0.2f : 0.02f;
 					nvs_saved = false;
 					break;
 				case 3:
@@ -644,7 +644,7 @@ void IRAM_ATTR osd_task(void*)
 					nvs_saved = false;
 					break;
 				case 2:
-					BSYNC_PIXEL_ABSTAND-= (j==5) ? 1.0f : 0.02f;
+					BSYNC_PIXEL_ABSTAND-= (j==5) ? 0.20f : 0.02f;
 					nvs_saved = false;
 					break;
 				case 3:
