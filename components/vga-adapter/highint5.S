@@ -20,6 +20,12 @@ xt_highint5:
     s32i    a13, a0, 8
     s32i    a12, a0, 12
 
+    // DEBUG auf GPIO20
+    movi    a14, (1 << 14)      // Pin 14
+    movi    a13, GPIO_OUT_W1TS_REG
+    s32i    a14, a13, 0         // auf High
+    // DEBUG Ende
+
     movi    a14, SYNC_PIN_REG
     movi    a15, SYNC_BIT_VAL
     l32i    a13, a14, 0
