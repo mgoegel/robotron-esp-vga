@@ -1,3 +1,14 @@
+#include <unistd.h>
+#include <esp_heap_caps.h>
+#include <nvs_flash.h>
+#include <nvs.h>
+#include <driver/gpio.h>
+
+#include "globalvars.h"
+#include "main.h"
+#include "pins.h"
+#include "osd.h"
+
 // Zeichensatz für das OSD-Textfeld
 unsigned char CHARSET[] =
 {

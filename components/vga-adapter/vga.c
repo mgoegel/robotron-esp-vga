@@ -1,3 +1,11 @@
+
+#include <esp_lcd_panel_ops.h>
+#include <esp_lcd_panel_rgb.h>
+
+#include "globalvars.h"
+#include "main.h"
+#include "pins.h"
+
 // alles für das VGA-Signal vorbereiten
 void setup_vga()
 {

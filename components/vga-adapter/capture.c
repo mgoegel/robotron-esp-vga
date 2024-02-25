@@ -1,3 +1,18 @@
+#include <math.h>
+#include "driver/gpio.h"
+#include "esp_private/periph_ctrl.h"
+#include <driver/spi_master.h>
+#include <xtensa_context.h>
+#include <soc/gpio_reg.h>
+#include <soc/gdma_reg.h>
+#include <soc/spi_reg.h>
+#include "esp_intr_alloc.h"
+#include <rom/ets_sys.h>
+
+#include "capture.h"
+#include "globalvars.h"
+#include "main.h"
+#include "pins.h"
 
 // alles für die Abtastung der Video-Signale vom ABG mit SPI vorbereiten
 void setup_abg()

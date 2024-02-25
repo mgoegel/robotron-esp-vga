@@ -1,3 +1,5 @@
+#pragma once
+
 // Pin-Definition --> muss gegebenenfalls auf die Schaltung angepasst wereden!
 #define PIN_NUM_VGA_R0 4
 #define PIN_NUM_VGA_R1 5
