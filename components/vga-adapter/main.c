@@ -5,8 +5,6 @@
 #include <rom/ets_sys.h>
 #include <soc/periph_defs.h>
 
-#define DEBUG 1
-
 #include "globalvars.h"
 #include "main.h"
 #include "osd.h"

@@ -200,6 +200,13 @@ void IRAM_ATTR capture_task(void*)
 
 		uint32_t line = next[3];
 
+		// _STATIC_SYS_VALS liegt jetzt im externen Flash-Rom - für die Kopierschleife etwas zu langsam
+		uint8_t colors[4];
+		for (int i=0;i<4;i++)
+		{
+			colors[i] = _STATIC_SYS_VALS[ACTIVESYS].colors[i];
+		}
+
 		// und nun die Pixel in den VGA-Puffer kopieren
 		if (sync>0 && line>=ABG_START_LINE && line<=ABG_START_LINE+399)
 		{
@@ -207,7 +214,7 @@ void IRAM_ATTR capture_task(void*)
             uint8_t* vgapos = (uint8_t*)((line - ABG_START_LINE)*640 + (int)VGA_BUF);
             for (int i=0;i<640;i++)
             {
-                *vgapos = _STATIC_SYS_VALS[ACTIVESYS].colors[(*bufpos) & 3];
+                *vgapos = colors[(*bufpos) & 3];
                 vgapos++;
                 bufpos+=PIXEL_STEP_LIST[i];
             }

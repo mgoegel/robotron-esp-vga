@@ -6,4 +6,4 @@ bool restore_settings();
 bool write_settings();
 void switch_system();
 
-extern void IRAM_ATTR osd_task(void*);
+extern void osd_task(void*);
