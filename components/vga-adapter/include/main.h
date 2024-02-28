@@ -1,3 +1,3 @@
 #pragma once
 
-void func(void);
+#define DEBUG 1

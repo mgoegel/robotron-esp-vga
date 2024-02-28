@@ -20,8 +20,8 @@ xt_highint5:
     s32i    a13, a0, 8
     s32i    a12, a0, 12
 
-    // DEBUG auf GPIO20
-    movi    a14, (1 << 14)      // Pin 14
+    // DEBUG auf GPIO14
+    movi    a14, (1 << 14)      // GPIO 14
     movi    a13, GPIO_OUT_W1TS_REG
     s32i    a14, a13, 0         // auf High
     // DEBUG Ende
@@ -36,7 +36,7 @@ xt_highint5:
     int i = 48;
     while (gpio_get_level(PIN_NUM_ABG_BSYNC2)!=0 && i>0) i--;
 */
-    movi    a12, 48                                // Timeout-Counter (~10µs)
+    movi    a12, 100                                // Timeout-Counter (~10µs)
 xt_highint5_L2:
     l32i    a13, a14, 0                             // GPIO's lesen
     and     a13, a13, a15
@@ -163,6 +163,12 @@ xt_highint5_L9:
     movi    a15, SYNC_BIT_VAL
     s32i    a15, a14, 0                             // gpio interrupt quittieren
     memw
+
+    // DEBUG auf GPIO14
+    movi    a14, (1 << 14)      // GPIO 14
+    movi    a13, GPIO_OUT_W1TS_REG
+    s32i    a14, a13, 4         // auf Low
+    // DEBUG Ende
 
     l32i    a15, a0, 0                              // Register wiederherstellen
     l32i    a14, a0, 4

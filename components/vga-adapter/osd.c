@@ -224,7 +224,7 @@ void switch_system() {
 }
 
 // das OSD-Menue
-void IRAM_ATTR osd_task(void*)
+void osd_task(void*)
 {
 	// Taster-Pins einstellen
 	gpio_config_t pincfg =
