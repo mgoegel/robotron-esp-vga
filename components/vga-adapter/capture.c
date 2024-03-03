@@ -39,7 +39,7 @@ void setup_abg()
     {
     	.cs_ena_pretrans = 0,
 		.cs_ena_posttrans = 0,
-        .clock_speed_hz = SPI_MASTER_FREQ_40M, // Abtast-Frequenz 40MHz - das ist mehr als wir eigendlich brauchen,
+        .clock_speed_hz = SPI_MASTER_FREQ_80M, // Abtast-Frequenz 80MHz - das ist mehr als wir eigendlich brauchen,
         .flags = SPI_DEVICE_HALFDUPLEX,        // aber mit weniger gäbe es Probleme mit der Pixelsynchronisation
 	    .queue_size=1,
 #ifdef DEBUG
@@ -52,7 +52,7 @@ void setup_abg()
     // Transfer-Konfiguration
 	spi_transaction_t transfer =
 	{
-	    .flags = SPI_TRANS_MODE_OCT,           // 8 Bit gleichzeitig einlesen. Es würde auch 4 reichen, aber dann wird die Auswertung langsamer und komplizierter
+	    .flags = SPI_TRANS_MODE_QIO,           // 4 Bit gleichzeitig einlesen
 	    .length = 0,                           // nix ausgeben...
 	    .rxlength = 1000,                      // Platzhalter, wird später aus dem hsync-timing errechnet
 	    .rx_buffer = ABG_PIXBUF1,
@@ -120,20 +120,20 @@ void IRAM_ATTR capture_task(void*)
 #endif
 
 		int a=1000000;
-		while ((next[0] & 0x80000000) != 0)  // darauf warten, dass der DMA-Kontroller den Transfer in den Puffer fertig meldet - der löscht das höchste Bit
+		while (((ABG_DMALIST[0] & 0x80000000) != 0) && ((ABG_DMALIST[4] & 0x80000000) != 0))  // darauf warten, dass der DMA-Kontroller den Transfer in den Puffer fertig meldet - der löscht das höchste Bit
 		{
 			if (bsyn_clock_last != bsyn_clock_diff && ABG_Scan_Line == 0)
 			{
 				// :200 Zeilen
 				// :240 MHz CPU-Takt
-				// *40 MHz Sample Rate
-				// = 1200
+				// *80 MHz Sample Rate
+				// = 600
 				// :ABG_PIXEL_PER_LINE
 #ifdef PIN_NUM_DEBUG_COPY
 		gpio_set_level(PIN_NUM_DEBUG_COPY,1);
 #endif
 				bsyn_clock_last = bsyn_clock_diff;
-				double weite = bsyn_clock_diff / (1200.0f * ABG_PIXEL_PER_LINE);
+				double weite = bsyn_clock_diff / (600.0f * ABG_PIXEL_PER_LINE);
 				double abst = 0.0f;
 				double step = modf((weite * ((double)(ABG_PIXEL_PER_LINE - BSYNC_PIXEL_ABSTAND))), &abst);
 				BSYNC_SAMPLE_ABSTAND = (int)abst;
@@ -149,8 +149,8 @@ void IRAM_ATTR capture_task(void*)
 
 				// :200 Zeilen
 				// :240 MHz CPU-Takt
-				// *40 MHz Sample Rate
-				// *8 Bit per Sample
+				// *80 MHz Sample Rate
+				// *4 Bit per Sample
 				// = 150
 				int spi_len = (bsyn_clock_diff / 150) - 600;
 				REG_SET_FIELD(SPI_MS_DLEN_REG(2), SPI_MS_DATA_BITLEN, spi_len);
@@ -173,6 +173,15 @@ void IRAM_ATTR capture_task(void*)
 			a--;
 		}
 
+		if ((ABG_DMALIST[0] & 0x80000000) == 0)
+		{
+			next = (uint32_t*)ABG_DMALIST;
+		}
+		else
+		{
+			next = (uint32_t*)ABG_DMALIST + 4;
+		}
+
 #ifdef PIN_NUM_DEBUG_COPY
 		gpio_set_level(PIN_NUM_DEBUG_COPY,1);
 #endif
@@ -184,15 +193,19 @@ void IRAM_ATTR capture_task(void*)
 
 		if ((buf[BSYNC_SUCHE_START] & 0x04)!=0x04)
 		{
-			BSYNC_SUCHE_START = BSYNC_SAMPLE_ABSTAND+1;
+			BSYNC_SUCHE_START = (BSYNC_SAMPLE_ABSTAND>>1)+1;
 		}
 
 		// Wir suchen den nächsten BSYNC-Impuls
 		for (int a=BSYNC_SUCHE_START; a<b; a++)
 		{
-			if ((buf[a] & 0x04)!=0x04)
+			if ((buf[a] & 0x44)!=0x44)
 			{
-				sync = a;  // gefunden!
+				sync = a * 2;  // gefunden!
+				if ((buf[a] & 0x44) == 0x40)
+				{
+					sync++;
+				}
 				BSYNC_SUCHE_START = a - 20;
 				break;
 			}
@@ -210,24 +223,21 @@ void IRAM_ATTR capture_task(void*)
 		// und nun die Pixel in den VGA-Puffer kopieren
 		if (sync>0 && line>=ABG_START_LINE && line<=ABG_START_LINE+399)
 		{
-            uint8_t* bufpos = (uint8_t*)((sync - BSYNC_SAMPLE_ABSTAND) + (int)buf);
+            uint32_t bufpos = sync - BSYNC_SAMPLE_ABSTAND;
             uint8_t* vgapos = (uint8_t*)((line - ABG_START_LINE)*640 + (int)VGA_BUF);
             for (int i=0;i<640;i++)
             {
-                *vgapos = colors[(*bufpos) & 3];
+                *vgapos = colors[((*((bufpos>>1)+buf))>>((bufpos & 1)==1 ? 0 : 4)) & 3];
                 vgapos++;
                 bufpos+=PIXEL_STEP_LIST[i];
             }
 		}
 		else
 		{
-			BSYNC_SUCHE_START = BSYNC_SAMPLE_ABSTAND+1;
+			BSYNC_SUCHE_START = (BSYNC_SAMPLE_ABSTAND>>1)+1;
 		}
 
 		// Puffer wieder für den DMA-Kontroller freigeben
 		next[0]=0x80ffffff;
-
-		// und zum nächsten Puffer springen
-		next = (uint32_t*)next[2];
 	}
 }

@@ -19,13 +19,13 @@ xt_highint5:
     s32i    a14, a0, 4
     s32i    a13, a0, 8
     s32i    a12, a0, 12
-
+/*
     // DEBUG auf GPIO14
     movi    a14, (1 << 14)      // GPIO 14
     movi    a13, GPIO_OUT_W1TS_REG
     s32i    a14, a13, 0         // auf High
     // DEBUG Ende
-
+*/
     movi    a14, SYNC_PIN_REG
     movi    a15, SYNC_BIT_VAL
     l32i    a13, a14, 0
@@ -68,11 +68,24 @@ xt_highint5_L4:
     s32i    a13, a15, 0
     memw
 
+xt_highint5_L5:
+    movi    a15, ABG_Interleave                     // Interleave-Zähler laden
+    l32i    a13, a15, 0
+    bnez    a14, xt_highint5_L11                    // Wenn Scanline==0, dann Interleave-Zähler+1
+    addi    a13, a13, 1
+    movi    a12, INTERLEAVE_MASK
+    and     a13, a13, a12
+    s32i    a13, a15, 0
+
 /*
         ABG_Scan_Line++;
 */
-xt_highint5_L5:
+xt_highint5_L11:
     addi    a14, a14, 1                             // Scanline++
+
+    movi    a12, INTERLEAVE_MASK
+    and     a15, a14, a12
+    bne     a13, a15, xt_highint5_L3                // wenn Interleave-Zähler != Scanline --> Ende
 
     movi    a13, 1000
     beq     a14, a13, xt_highint5_L8
@@ -163,13 +176,13 @@ xt_highint5_L9:
     movi    a15, SYNC_BIT_VAL
     s32i    a15, a14, 0                             // gpio interrupt quittieren
     memw
-
+/*
     // DEBUG auf GPIO14
     movi    a14, (1 << 14)      // GPIO 14
     movi    a13, GPIO_OUT_W1TS_REG
     s32i    a14, a13, 4         // auf Low
     // DEBUG Ende
-
+*/
     l32i    a15, a0, 0                              // Register wiederherstellen
     l32i    a14, a0, 4
     l32i    a13, a0, 8

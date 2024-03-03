@@ -19,7 +19,7 @@ const struct SYSSTATIC _STATIC_SYS_VALS[] = {
 // Initialisierte Daten aus dem NVS - Werte, die durch den Anwender geändert werden können
 // Standardwerte für Modusinitialisierung nach Umschaltung des Modus
 const struct SYSVARS _DEFAULT_SYS_VARS[] = {
-	{.mode = 0, .pixel_abstand = 89.86f, .start_line = 29, .pixel_per_line = 736}, // A7100
+	{.mode = 0, .pixel_abstand = 90.10f, .start_line = 29, .pixel_per_line = 736}, // A7100
 	{.mode = 1, .pixel_abstand = 155.67f /* schwankt bis auf 155.88 */, .start_line = 6, .pixel_per_line = 864.1} // PC1715
 };
 
@@ -34,6 +34,7 @@ volatile double ABG_PIXEL_PER_LINE;
 volatile double BSYNC_PIXEL_ABSTAND;
 volatile uint32_t ABG_START_LINE;
 volatile bool ABG_RUN = false;
+uint32_t ABG_Interleave = 0;
 
 int BSYNC_SUCHE_START = 0;
 uint8_t* PIXEL_STEP_LIST;
