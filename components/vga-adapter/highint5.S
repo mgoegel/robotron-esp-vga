@@ -82,7 +82,8 @@ xt_highint5_L5:
     l32i    a13, a15, 0
     bnez    a14, xt_highint5_L11                    // Wenn Scanline==0, dann Interleave-Zähler+1
     addi    a13, a13, 1
-    movi    a12, INTERLEAVE_MASK
+    movi    a12, ABG_Interleave_Mask
+    l32i    a12, a12, 0
     and     a13, a13, a12
     s32i    a13, a15, 0
 
@@ -92,7 +93,8 @@ xt_highint5_L5:
 xt_highint5_L11:
     addi    a14, a14, 1                             // Scanline++
 
-    movi    a12, INTERLEAVE_MASK
+    movi    a12, ABG_Interleave_Mask
+    l32i    a12, a12, 0
     and     a15, a14, a12
     bne     a13, a15, xt_highint5_L3                // wenn Interleave-Zähler != Scanline --> Ende
 

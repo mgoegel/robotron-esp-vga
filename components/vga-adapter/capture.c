@@ -21,7 +21,7 @@ void setup_abg()
 	uint8_t* ABG_PIXBUF1 = heap_caps_malloc(4096, MALLOC_CAP_DMA | MALLOC_CAP_32BIT | MALLOC_CAP_INTERNAL);
 	uint8_t* ABG_PIXBUF2 = heap_caps_malloc(4096, MALLOC_CAP_DMA | MALLOC_CAP_32BIT | MALLOC_CAP_INTERNAL);
 	ABG_DMALIST = heap_caps_malloc(32, MALLOC_CAP_DMA | MALLOC_CAP_32BIT | MALLOC_CAP_INTERNAL);
-	PIXEL_STEP_LIST = heap_caps_malloc(640, MALLOC_CAP_DMA | MALLOC_CAP_32BIT | MALLOC_CAP_INTERNAL);
+	PIXEL_STEP_LIST = heap_caps_malloc(ABG_XRes, MALLOC_CAP_DMA | MALLOC_CAP_32BIT | MALLOC_CAP_INTERNAL);
 
 	// Pin-Konfiguration
 	spi_bus_config_t buscfg=
@@ -53,7 +53,7 @@ void setup_abg()
     // Transfer-Konfiguration
 	spi_transaction_t transfer =
 	{
-	    .flags = SPI_TRANS_MODE_QIO,           // 4 Bit gleichzeitig einlesen
+	    .flags = (ABG_Bits_per_sample == 4) ? SPI_TRANS_MODE_QIO : SPI_TRANS_MODE_OCT,           // 4 oder 8 Bit gleichzeitig einlesen
 	    .length = 0,                           // nix ausgeben...
 	    .rxlength = 1000,                      // Platzhalter, wird später aus dem hsync-timing errechnet
 	    .rx_buffer = ABG_PIXBUF1,
@@ -140,7 +140,7 @@ void IRAM_ATTR capture_task(void*)
 				BSYNC_SAMPLE_ABSTAND = (int)abst;
 				int istep = round(step); 
 				int last = istep;
-				for (int i=0;i<640;i++)
+				for (int i=0;i<ABG_XRes;i++)
 				{
 					step += weite;
 					istep = round(step);
@@ -153,7 +153,7 @@ void IRAM_ATTR capture_task(void*)
 				// *80 MHz Sample Rate
 				// *4 Bit per Sample
 				// = 150
-				int spi_len = (bsyn_clock_diff / 150) - 600;
+				int spi_len = (bsyn_clock_diff / ((ABG_Bits_per_sample == 4) ? 150 : 75)) - 600;
 				REG_SET_FIELD(SPI_MS_DLEN_REG(2), SPI_MS_DATA_BITLEN, spi_len);
 				REG_SET_BIT(SPI_CMD_REG(2), SPI_UPDATE);
 				ABG_RUN = true;
@@ -164,7 +164,7 @@ void IRAM_ATTR capture_task(void*)
 
 			if (a==0)						 // Die Wartezeit ist abgelaufen!
 			{
-				for (int b=0;b<640*400;b++)  // VGA-Puffer leeren
+				for (int b=0;b<ABG_XRes*ABG_YRes;b++)  // VGA-Puffer leeren
 				{
 				    VGA_BUF[b]=0;
 				}
@@ -198,17 +198,34 @@ void IRAM_ATTR capture_task(void*)
 		}
 
 		// Wir suchen den nächsten BSYNC-Impuls
-		for (int a=BSYNC_SUCHE_START; a<b; a++)
+
+
+		if (ABG_Bits_per_sample == 4)
 		{
-			if ((buf[a] & 0x88)!=0x88)
+			for (int a=BSYNC_SUCHE_START; a<b; a++)
 			{
-				sync = a * 2;  // gefunden!
-				if ((buf[a] & 0x88) == 0x80)
+				if ((buf[a] & 0x88)!=0x88)
 				{
-					sync++;
+					sync = a * 2;  // gefunden!
+					if ((buf[a] & 0x88) == 0x80)
+					{
+						sync++;
+					}
+					BSYNC_SUCHE_START = a - 20;
+					break;
 				}
-				BSYNC_SUCHE_START = a - 20;
-				break;
+			}
+		}
+		else
+		{
+			for (int a=BSYNC_SUCHE_START; a<b; a++)
+			{
+				if ((buf[a] & 0x08)!=0x08)
+				{
+					sync = a;  // gefunden!
+					BSYNC_SUCHE_START = a - 20;
+					break;
+				}
 			}
 		}
 
@@ -222,16 +239,64 @@ void IRAM_ATTR capture_task(void*)
 		}
 
 		// und nun die Pixel in den VGA-Puffer kopieren
-		if (sync>0 && line>=ABG_START_LINE && line<=ABG_START_LINE+399)
+		if (sync>0 && line>=ABG_START_LINE && line<=ABG_START_LINE+(ABG_YRes-1))
 		{
-            uint32_t bufpos = sync - BSYNC_SAMPLE_ABSTAND;
-            uint8_t* vgapos = (uint8_t*)((line - ABG_START_LINE)*640 + (int)VGA_BUF);
-            for (int i=0;i<640;i++)
-            {
-                *vgapos = colors[((*((bufpos>>1)+buf))>>((bufpos & 1)==1 ? 1 : 5)) & 3];
-                vgapos++;
-                bufpos+=PIXEL_STEP_LIST[i];
-            }
+			if (ABG_Bits_per_sample == 4)
+			{
+				uint32_t bufpos = sync - BSYNC_SAMPLE_ABSTAND;
+				uint8_t* vgapos = (uint8_t*)((line - ABG_START_LINE)*ABG_XRes + (int)VGA_BUF);
+				if (ABG_XRes == 640)   // mit Variable als Schleifen-Ende ist das zu langsam!
+				{
+					for (int i=0;i<640;i++)
+					{
+						*vgapos = colors[((*((bufpos>>1)+buf))>>((bufpos & 1)==1 ? 1 : 5)) & 3];
+						vgapos++;
+						bufpos+=PIXEL_STEP_LIST[i];
+					}
+				}
+				else
+				{
+					for (int i=0;i<ABG_XRes;i++)  // diese Variante nur als Fallback
+					{
+						*vgapos = colors[((*((bufpos>>1)+buf))>>((bufpos & 1)==1 ? 1 : 5)) & 3];
+						vgapos++;
+						bufpos+=PIXEL_STEP_LIST[i];
+					}
+				}
+			}
+			else // 8 bit samples
+			{
+				uint8_t* bufpos = (uint8_t*)((sync - BSYNC_SAMPLE_ABSTAND) + (int)buf);
+				uint8_t* vgapos = (uint8_t*)((line - ABG_START_LINE)*ABG_XRes + (int)VGA_BUF);
+				if (ABG_XRes == 640) // mit Variable als Schleifen-Ende ist das zu langsam!
+				{
+					for (int i=0;i<640;i++)
+					{
+						*vgapos = colors[(*bufpos)>>1 & 3];
+						vgapos++;
+						bufpos+=PIXEL_STEP_LIST[i];
+					}
+				}
+				else if (ABG_XRes == 720)
+				{
+					for (int i=0;i<720;i++)
+					{
+						*vgapos = colors[(*bufpos)>>1 & 3];
+						vgapos++;
+						bufpos+=PIXEL_STEP_LIST[i];
+					}
+				}
+				else 
+				{
+					for (int i=0;i<ABG_XRes;i++)
+					{
+						*vgapos = colors[(*bufpos)>>1 & 3];
+						vgapos++;
+						bufpos+=PIXEL_STEP_LIST[i];
+					}
+				}
+
+			}
 		}
 		else
 		{
