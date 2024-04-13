@@ -26,6 +26,15 @@ xt_highint5:
     s32i    a14, a13, 0         // auf High
     // DEBUG Ende
 */
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+
     movi    a14, SYNC_PIN_REG
     movi    a15, SYNC_BIT_VAL
     l32i    a13, a14, 0

@@ -26,9 +26,10 @@ void setup_abg()
 	// Pin-Konfiguration
 	spi_bus_config_t buscfg=
 	{
-		.data0_io_num = PIN_NUM_ABG_VIDEO1,  // Farb-Signal
-    	.data1_io_num = PIN_NUM_ABG_VIDEO2,  // Farb-Signal
-    	.data2_io_num = PIN_NUM_ABG_BSYNC1,  // wir zeichnen auch das BSYN auf, daran können wir später die Spalten ausrichten
+		.data0_io_num = 0,
+		.data1_io_num = PIN_NUM_ABG_VIDEO1,  // Farb-Signal
+    	.data2_io_num = PIN_NUM_ABG_VIDEO2,  // Farb-Signal
+    	.data3_io_num = PIN_NUM_ABG_BSYNC1,  // wir zeichnen auch das BSYN auf, daran können wir später die Spalten ausrichten
     	.max_transfer_sz = 4092,
     	.flags = SPICOMMON_BUSFLAG_MASTER | SPICOMMON_BUSFLAG_GPIO_PINS,
     };
@@ -191,7 +192,7 @@ void IRAM_ATTR capture_task(void*)
 		int sync = 0;
 		uint8_t* buf = (uint8_t*)next[1];
 
-		if ((buf[BSYNC_SUCHE_START] & 0x04)!=0x04)
+		if ((buf[BSYNC_SUCHE_START] & 0x08)!=0x08)
 		{
 			BSYNC_SUCHE_START = (BSYNC_SAMPLE_ABSTAND>>1)+1;
 		}
@@ -199,10 +200,10 @@ void IRAM_ATTR capture_task(void*)
 		// Wir suchen den nächsten BSYNC-Impuls
 		for (int a=BSYNC_SUCHE_START; a<b; a++)
 		{
-			if ((buf[a] & 0x44)!=0x44)
+			if ((buf[a] & 0x88)!=0x88)
 			{
 				sync = a * 2;  // gefunden!
-				if ((buf[a] & 0x44) == 0x40)
+				if ((buf[a] & 0x88) == 0x80)
 				{
 					sync++;
 				}
@@ -227,7 +228,7 @@ void IRAM_ATTR capture_task(void*)
             uint8_t* vgapos = (uint8_t*)((line - ABG_START_LINE)*640 + (int)VGA_BUF);
             for (int i=0;i<640;i++)
             {
-                *vgapos = colors[((*((bufpos>>1)+buf))>>((bufpos & 1)==1 ? 0 : 4)) & 3];
+                *vgapos = colors[((*((bufpos>>1)+buf))>>((bufpos & 1)==1 ? 1 : 5)) & 3];
                 vgapos++;
                 bufpos+=PIXEL_STEP_LIST[i];
             }
