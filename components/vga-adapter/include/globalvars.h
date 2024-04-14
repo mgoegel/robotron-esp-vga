@@ -4,40 +4,29 @@
 #include "nvs_flash.h"
 #include "nvs.h"
 
-// Computer Typen
-#define A7100 1
-#define PC1715 2
-
-#define ZIELTYP A7100
-
-// Deklaration der Modi
-
 // Statische Struktur - Systemkonstanten
 struct SYSSTATIC {
 	char* name;
 	uint8_t colors[4];
+	uint8_t bits_per_sample; // 4 oder 8
+	uint16_t xres; // 640 oder 720
+	uint16_t yres;
+	uint8_t interleave_mask; // 	0=1:1	1=1:2	3=1:4
+	uint32_t default_pixel_abstand;
+	uint32_t default_start_line;
+	uint32_t default_pixel_per_line;
 };
 
 // Statische Werte vorinitialisiert
 extern const struct SYSSTATIC _STATIC_SYS_VALS[];
 
-// Modusstruktur - Systemvariablen, änderbar durch den Anwender
-struct SYSVARS {
-	uint16_t mode;
-	float pixel_abstand;
-	uint32_t start_line;
-	float pixel_per_line;
-};
-
-// Initialisierte Daten aus dem NVS - Werte, die durch den Anwender geändert werden können
-// Standardwerte für Modusinitialisierung nach Umschaltung des Modus
-extern const struct SYSVARS _DEFAULT_SYS_VARS[];
-
 // Bezeichner für NVS KEY - max 15 Zeichen!
 #define _NVS_SETTING_MODE	"SMODE"
-#define _NVS_SETTING_PIXEL_ABSTAND "SPIXABST"
-#define _NVS_SETTING_START_LINE	"SSTARTLINE"
-#define _NVS_SETTING_PIXEL_PER_LINE "SPIXPERLINE"
+#define _NVS_SETTING_PIXEL_ABSTAND "SPIXABST(%d)"
+#define _NVS_SETTING_START_LINE	"SSTARTLINE(%d)"
+#define _NVS_SETTING_PIXEL_PER_LINE "SPIXPERLINE(%d)"
+
+#define _SETTINGS_COUNT 3 // Anzahl unterstützter Computer = 3 (A7100,PC1715,EC1835)
 
 // globale Variablen
 
@@ -52,6 +41,11 @@ extern volatile double ABG_PIXEL_PER_LINE;
 extern volatile double BSYNC_PIXEL_ABSTAND;
 extern volatile uint32_t ABG_START_LINE;
 extern volatile bool ABG_RUN;
+extern uint32_t ABG_Interleave_Mask;
+extern uint32_t ABG_Interleave;
+extern uint16_t ABG_XRes;
+extern uint16_t ABG_YRes;
+extern uint8_t ABG_Bits_per_sample;
 
 extern int BSYNC_SUCHE_START;
 extern uint8_t* PIXEL_STEP_LIST;

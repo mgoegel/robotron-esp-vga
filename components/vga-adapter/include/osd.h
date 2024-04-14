@@ -3,7 +3,6 @@
 
 void setup_flash();
 bool restore_settings();
-bool write_settings();
-void switch_system();
+bool write_settings(bool full);
 
 extern void osd_task(void*);

@@ -3,6 +3,7 @@
 #include <nvs_flash.h>
 #include <nvs.h>
 #include <driver/gpio.h>
+#include "esp_system.h"
 
 #include "globalvars.h"
 #include "main.h"
@@ -107,7 +108,11 @@ unsigned char CHARSET[] =
 	0x7F, 0x7F, 0x00, 0x00, 0x00, 0x00,  // |
 	0x77, 0x7F, 0x08, 0x00, 0x00, 0x00,  // }
 	0x21, 0x75, 0x54, 0x7D, 0x79, 0x00,  // ä
-	0x7F, 0x7F, 0x00, 0x00, 0x00, 0x00
+	0x7F, 0x7F, 0x00, 0x00, 0x00, 0x00,
+	0x0c, 0x06, 0x7f, 0x06, 0x0c, 0x00,  // \x80 pfeil hoch
+	0x18, 0x30, 0x7f, 0x30, 0x18, 0x00,  // \x81 pfeil runter
+	0x08, 0x08, 0x2a, 0x1c, 0x08, 0x00,  // \x82 pfeil rechts
+	0x08, 0x1c, 0x2a, 0x08, 0x08, 0x00   // \x83 pfeil links
 };
 
 // Text in die OSD-Zeile drucken
@@ -120,7 +125,7 @@ static void drawtext(char* txt, int count, int pos, char color)
 			char c=CHARSET[(txt[a]-32)*6+b];
 			for (int d=0;d<7;d++)
 			{
-				OSD_BUF[b+(pos+a)*7+d*640] = (((1 << d) & c) != 0) ? color : 0x00;
+				OSD_BUF[b+(pos+a)*7+d*ABG_XRes] = (((1 << d) & c) != 0) ? color : 0x00;
 			}
 		}
 	}
@@ -155,58 +160,78 @@ bool restore_settings() {
 		return false;
 
 	// Read
-	printf("Lese Einstellungen vom Flash ... ");
+	printf("Lese Einstellungen vom Flash ...\n");
 
 	int16_t nvs_mode = -1;
 	uint32_t nvs_pixel_abstand = 0;
 	uint32_t nvs_start_line = 0;
 	uint32_t nvs_pixel_per_line = 0;
 
-	esp_err_t err;
-	bool valid_settings = true;
-
-	err = nvs_get_i16(sys_nvs_handle, _NVS_SETTING_MODE, &nvs_mode);
-	if (err != ESP_OK) valid_settings = false;
-	err = nvs_get_u32(sys_nvs_handle, _NVS_SETTING_PIXEL_ABSTAND, &nvs_pixel_abstand);
-	if (err != ESP_OK) valid_settings = false;
-	err = nvs_get_u32(sys_nvs_handle, _NVS_SETTING_START_LINE, &nvs_start_line);
-	if (err != ESP_OK) valid_settings = false;
-	err = nvs_get_u32(sys_nvs_handle, _NVS_SETTING_PIXEL_PER_LINE, &nvs_pixel_per_line);
-	if (err != ESP_OK) valid_settings = false;
-
-	if (!valid_settings) {
-		printf("Einstellungen nicht wiederhergestellt.");
-		return false;
+	char tb[40];
+    
+	if (nvs_get_i16(sys_nvs_handle, _NVS_SETTING_MODE, &nvs_mode) != ESP_OK) {
+		printf("Modus-Einstellung nicht gefunden, nutze default = A7100\n");
+		nvs_mode = 0;
 	}
-	printf("Einstellungen geladen. Zuweisung...");
+	if (nvs_mode<0 || nvs_mode>_SETTINGS_COUNT) {
+		printf("Modus-Einstellung ungültig (%d), nutze default = A7100\n",nvs_mode);
+		nvs_mode = 0;
+	}
+
+	snprintf(tb, 40, _NVS_SETTING_PIXEL_ABSTAND, nvs_mode);
+	if (nvs_get_u32(sys_nvs_handle, tb, &nvs_pixel_abstand) != ESP_OK) {
+		nvs_pixel_abstand = _STATIC_SYS_VALS[nvs_mode].default_pixel_abstand;
+		printf("Pixelabstand-Einstellung nicht gefunden, nutze default = %ld\n",nvs_pixel_abstand);
+	}
+	snprintf(tb, 40, _NVS_SETTING_START_LINE, nvs_mode);
+	if (nvs_get_u32(sys_nvs_handle, tb, &nvs_start_line) != ESP_OK) {
+		nvs_start_line =  _STATIC_SYS_VALS[nvs_mode].default_start_line;
+		printf("Startline-Einstellung nicht gefunden, nutze default = %ld\n",nvs_start_line);
+	}
+	snprintf(tb, 40, _NVS_SETTING_PIXEL_PER_LINE, nvs_mode);
+	if (nvs_get_u32(sys_nvs_handle, tb, &nvs_pixel_per_line) != ESP_OK) {
+		nvs_pixel_per_line =  _STATIC_SYS_VALS[nvs_mode].default_pixel_per_line;
+		printf("Pixelperline-Einstellung nicht gefunden, nutze default = %ld\n",nvs_pixel_per_line);
+	}
+
 	ACTIVESYS = nvs_mode;
 	BSYNC_PIXEL_ABSTAND = (float)nvs_pixel_abstand / 100;
 	ABG_START_LINE = nvs_start_line;
 	ABG_PIXEL_PER_LINE = (float)nvs_pixel_per_line / 100;
-	printf("Zuweisung erledigt (%d, %f, %ld, %f)", ACTIVESYS, BSYNC_PIXEL_ABSTAND, ABG_START_LINE, ABG_PIXEL_PER_LINE);
+	ABG_Interleave_Mask = _STATIC_SYS_VALS[nvs_mode].interleave_mask;
+	ABG_XRes = _STATIC_SYS_VALS[nvs_mode].xres;
+	ABG_YRes = _STATIC_SYS_VALS[nvs_mode].yres;
+	ABG_Bits_per_sample = _STATIC_SYS_VALS[nvs_mode].bits_per_sample;
+	printf("Zuweisung erledigt (%d, %f, %ld, %f)\n", ACTIVESYS, BSYNC_PIXEL_ABSTAND, ABG_START_LINE, ABG_PIXEL_PER_LINE);
 	return true;
 }
 
 // Einstellungen im Flash sichern
-bool write_settings() {
+bool write_settings(bool full) {
 	if (sys_nvs_handle == 0)
 		return false;
 
-	int16_t nvs_mode = ACTIVESYS;
+	uint16_t nvs_mode = ACTIVESYS;
 	uint32_t nvs_pixel_abstand = (int)(BSYNC_PIXEL_ABSTAND * 100);
 	uint32_t nvs_start_line = ABG_START_LINE;
 	uint32_t nvs_pixel_per_line = (int)(ABG_PIXEL_PER_LINE * 100);
+	char tb[40];
 
 	esp_err_t err;
 	bool valid_settings = true;
 	err = nvs_set_i16(sys_nvs_handle, _NVS_SETTING_MODE, nvs_mode);
 	if (err != ESP_OK) valid_settings = false;
-	err = nvs_set_u32(sys_nvs_handle, _NVS_SETTING_PIXEL_ABSTAND, nvs_pixel_abstand);
-	if (err != ESP_OK) valid_settings = false;
-	err = nvs_set_u32(sys_nvs_handle, _NVS_SETTING_START_LINE, nvs_start_line);
-	if (err != ESP_OK) valid_settings = false;
-	err = nvs_set_u32(sys_nvs_handle, _NVS_SETTING_PIXEL_PER_LINE, nvs_pixel_per_line);
-	if (err != ESP_OK) valid_settings = false;
+	if (full) {
+		snprintf(tb, 40, _NVS_SETTING_PIXEL_ABSTAND, nvs_mode);
+		err = nvs_set_u32(sys_nvs_handle, tb, nvs_pixel_abstand);
+		if (err != ESP_OK) valid_settings = false;
+		snprintf(tb, 40, _NVS_SETTING_START_LINE, nvs_mode);
+		err = nvs_set_u32(sys_nvs_handle, tb, nvs_start_line);
+		if (err != ESP_OK) valid_settings = false;
+		snprintf(tb, 40, _NVS_SETTING_PIXEL_PER_LINE, nvs_mode);
+		err = nvs_set_u32(sys_nvs_handle, tb, nvs_pixel_per_line);
+		if (err != ESP_OK) valid_settings = false;
+	}
 
 	if (!valid_settings) {
 		printf("Einstellungen nicht gespeichert.");
@@ -214,13 +239,6 @@ bool write_settings() {
 	}
 	printf("Einstellungen gespeichert.");
 	return true;
-}
-
-// SYSTEM umschalten, Werte neu initialisieren
-void switch_system() {
-	BSYNC_PIXEL_ABSTAND = _DEFAULT_SYS_VARS[ACTIVESYS].pixel_abstand;
-	ABG_PIXEL_PER_LINE = _DEFAULT_SYS_VARS[ACTIVESYS].pixel_per_line;
-	ABG_START_LINE = _DEFAULT_SYS_VARS[ACTIVESYS].start_line;
 }
 
 // das OSD-Menue
@@ -236,7 +254,7 @@ void osd_task(void*)
 	};
 	ESP_ERROR_CHECK(gpio_config(&pincfg));
 
-	char* tb = heap_caps_malloc(40, MALLOC_CAP_INTERNAL);
+	char* tb = heap_caps_malloc(60, MALLOC_CAP_INTERNAL);
 	int cursor = 0;
 	for (int h=0;h<20*640;h++) OSD_BUF[h]=0x0;
 
@@ -257,7 +275,7 @@ void osd_task(void*)
 			drawtext(tb,l,57,cursor==3 ? 0x03 : 0x3f);
 		} else if (cursor > 3)
 		{
-			l = snprintf(tb, 40, "Einstellungen sichern ^/laden v        ");
+			l = snprintf(tb, 60, "Einstellungen sichern \x80 / default \x81 / laden \x82              ");
 			drawtext(tb,l,9,cursor==4 ? 0x03 : 0x3f);
 		}
 		
@@ -287,18 +305,21 @@ void osd_task(void*)
 			j = 50;
 		}
 
-		// cursor nach rechts
+		// cursor nach links
 		if (gpio_get_level(PIN_NUM_TAST_LEFT)==0)
 		{
 			cursor--;
 			if (cursor==-1) cursor=4;
 		}
 
-		// cursor nach links
+		// cursor nach rechts
 		if (gpio_get_level(PIN_NUM_TAST_RIGHT)==0)
 		{
 			cursor++;
-			if (cursor==5) cursor=0;
+			if (cursor==5) {
+				nvs_saved = restore_settings();
+				cursor = 0;
+			}
 		}
 
 		// wert erhöhen
@@ -307,11 +328,11 @@ void osd_task(void*)
 			switch (cursor)
 			{
 				case 0:
-					if (ACTIVESYS < 1)
+					if (ACTIVESYS < (_SETTINGS_COUNT-1))
 					{
 						ACTIVESYS++;
-						switch_system();
-						nvs_saved = false;
+						write_settings(false);
+						esp_restart();
 					}
 					break;
 				case 1:
@@ -328,7 +349,8 @@ void osd_task(void*)
 					break;
 				case 4:
 					if (!nvs_saved) // Sicherung gegen unnötiges schreiben
-						nvs_saved = write_settings();
+						nvs_saved = write_settings(true);
+					cursor=0;
 					break;
 
 			}
@@ -343,8 +365,8 @@ void osd_task(void*)
 					if (ACTIVESYS > 0)
 					{
 						ACTIVESYS--;
-						switch_system();
-						nvs_saved = false;
+						write_settings(false); // nur aktives System sichern, keine Parameter
+						esp_restart();
 					}
 					break;
 				case 1:
@@ -360,7 +382,11 @@ void osd_task(void*)
 					nvs_saved = false;
 					break;
 				case 4:
-					nvs_saved = restore_settings();
+					// default Einstellungen setzen
+					BSYNC_PIXEL_ABSTAND = (float)_STATIC_SYS_VALS[ACTIVESYS].default_pixel_abstand / 100;
+					ABG_START_LINE = _STATIC_SYS_VALS[ACTIVESYS].default_start_line;
+					ABG_PIXEL_PER_LINE = (float)_STATIC_SYS_VALS[ACTIVESYS].default_pixel_per_line / 100;
+					cursor=0;
 					break;
 			}
 		}

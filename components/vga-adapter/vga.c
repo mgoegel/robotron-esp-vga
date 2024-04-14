@@ -31,15 +31,15 @@ void setup_vga()
         {
         	// Timing von 800x600 70Hz VGA. Andere Auflösungen geben kein stabiles Bild.
             .pclk_hz = 40000000,  		// 40MHz Pixelfrequenz
-            .h_res = 640, 				// 800 auf VGA
-            .v_res = 420, 				// 600 auf VGA
+            .h_res = ABG_XRes, 			// 800 auf VGA
+            .v_res = ABG_YRes+20,   	// 600 auf VGA
 			//line
-            .hsync_back_porch = 88+80,  // 80 Pixel Rand (800-640)/2
-            .hsync_front_porch = 40+80, // 80 Pixel Rand (800-640)/2
+            .hsync_back_porch = 88+((800-ABG_XRes)/2),
+            .hsync_front_porch = 40+((800-ABG_XRes)/2),
             .hsync_pulse_width = 128,
 			//frame
-            .vsync_back_porch = 23+80, // 80 Pixel Rand (600-400)/2 (-20 für osd)
-            .vsync_front_porch = 1+100, // 100 Pixel Rand (600-400)/2
+            .vsync_back_porch = 23+((600-ABG_YRes)/2)-20,
+            .vsync_front_porch = 1+((600-ABG_YRes)/2),
             .vsync_pulse_width = 4,
 			.flags.hsync_idle_low = 1,
 			.flags.vsync_idle_low = 1,
@@ -52,5 +52,5 @@ void setup_vga()
     ESP_ERROR_CHECK(esp_lcd_panel_reset(VGA_Handle));
     ESP_ERROR_CHECK(esp_lcd_panel_init(VGA_Handle));
     esp_lcd_rgb_panel_get_frame_buffer(VGA_Handle, 1, (void*)&OSD_BUF); // der OSD-Buffer ist genaugenommen der gesamte Bildschirm
-    VGA_BUF = 20 * 640 + OSD_BUF;  // der Bereich für das eigendliche Bild beginnt erst ab Zeile 20
+    VGA_BUF = 20 * ABG_XRes + OSD_BUF;  // der Bereich für das eigendliche Bild beginnt erst ab Zeile 20
 }

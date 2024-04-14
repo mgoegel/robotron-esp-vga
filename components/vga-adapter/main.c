@@ -16,13 +16,11 @@
 // Hauptprogramm
 void IRAM_ATTR app_main(void)
 {
-	setup_vga();
 	setup_flash();
-	// Standardwerte initialisieren
-	switch_system();
 	// NVS Einstellungen laden, wenn vorhanden
 	restore_settings();
 
+	setup_vga();
 	xTaskCreatePinnedToCore(osd_task,"osd_task",6000,NULL,0,NULL,0);
 	xTaskCreatePinnedToCore(capture_task,"capture_task",6000,NULL,10,NULL,1);
 }
