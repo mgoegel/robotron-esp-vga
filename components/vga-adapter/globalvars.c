@@ -36,8 +36,8 @@ const struct SYSSTATIC _STATIC_SYS_VALS[] = {
 		.yres = 350,
 		.interleave_mask = 0,
 		.default_pixel_abstand = 9010,     // Platzhalter, reale Parameter ermitteln!
-		.default_start_line = 29,          // Platzhalter, reale Parameter ermitteln!
-		.default_pixel_per_line = 73600,   // Platzhalter, reale Parameter ermitteln!
+		.default_start_line = 14,          // Platzhalter, reale Parameter ermitteln!
+		.default_pixel_per_line = 82800,   // Platzhalter, reale Parameter ermitteln!
 	}
 };
 
