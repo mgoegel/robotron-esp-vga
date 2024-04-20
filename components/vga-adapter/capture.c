@@ -245,57 +245,32 @@ void IRAM_ATTR capture_task(void*)
 			{
 				uint32_t bufpos = sync - BSYNC_SAMPLE_ABSTAND;
 				uint8_t* vgapos = (uint8_t*)((line - ABG_START_LINE)*ABG_XRes + (int)VGA_BUF);
-				if (ABG_XRes == 640)   // mit Variable als Schleifen-Ende ist das zu langsam!
+				uint8_t* stepende = (uint8_t*)((int)PIXEL_STEP_LIST + ABG_XRes);
+				for (uint8_t* steplist=PIXEL_STEP_LIST;steplist<stepende;steplist++)
 				{
-					for (int i=0;i<640;i++)
+					if (bufpos & 1)
 					{
-						*vgapos = colors[((*((bufpos>>1)+buf))>>((bufpos & 1)==1 ? 1 : 5)) & 3];
-						vgapos++;
-						bufpos+=PIXEL_STEP_LIST[i];
+						*vgapos = colors[((*((bufpos>>1)+buf))>>1) & 3];
 					}
-				}
-				else
-				{
-					for (int i=0;i<ABG_XRes;i++)  // diese Variante nur als Fallback
+					else
 					{
-						*vgapos = colors[((*((bufpos>>1)+buf))>>((bufpos & 1)==1 ? 1 : 5)) & 3];
-						vgapos++;
-						bufpos+=PIXEL_STEP_LIST[i];
+						*vgapos = colors[((*((bufpos>>1)+buf))>>5) & 3];
 					}
+					vgapos++;
+					bufpos+=*steplist;
 				}
 			}
 			else // 8 bit samples
 			{
 				uint8_t* bufpos = (uint8_t*)((sync - BSYNC_SAMPLE_ABSTAND) + (int)buf);
 				uint8_t* vgapos = (uint8_t*)((line - ABG_START_LINE)*ABG_XRes + (int)VGA_BUF);
-				if (ABG_XRes == 640) // mit Variable als Schleifen-Ende ist das zu langsam!
+				uint8_t* stepende = (uint8_t*)((int)PIXEL_STEP_LIST + ABG_XRes);
+				for (uint8_t* steplist=PIXEL_STEP_LIST;steplist<stepende;steplist++)
 				{
-					for (int i=0;i<640;i++)
-					{
-						*vgapos = colors[(*bufpos)>>1 & 3];
-						vgapos++;
-						bufpos+=PIXEL_STEP_LIST[i];
-					}
+					*vgapos = colors[(*bufpos)>>1 & 3];
+					vgapos++;
+					bufpos+=*steplist;
 				}
-				else if (ABG_XRes == 720)
-				{
-					for (int i=0;i<720;i++)
-					{
-						*vgapos = colors[(*bufpos)>>1 & 3];
-						vgapos++;
-						bufpos+=PIXEL_STEP_LIST[i];
-					}
-				}
-				else 
-				{
-					for (int i=0;i<ABG_XRes;i++)
-					{
-						*vgapos = colors[(*bufpos)>>1 & 3];
-						vgapos++;
-						bufpos+=PIXEL_STEP_LIST[i];
-					}
-				}
-
 			}
 		}
 		else
