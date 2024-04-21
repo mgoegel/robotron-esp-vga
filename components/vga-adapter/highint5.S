@@ -26,14 +26,38 @@ xt_highint5:
     s32i    a14, a13, 0         // auf High
     // DEBUG Ende
 */
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
+
+    /*
+     128x NOP um das BSYNC Signal einschwingen zu lassen
+     https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/api-reference/system/ulp_instruction_set.html
+     NOP = 2 cycle to execute, 4 cycles to fetch next instruction
+     Delay bei 240MHz ca. 3,2µS
+     */
+    nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; ;nop
+    nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; ;nop
+    nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; ;nop
+    nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; ;nop
+    nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; ;nop
+    nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; ;nop
+    nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; ;nop
+    nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; ;nop
+
+/*
+    // Alternatives (konfigurierbares?) delay
+    // https://www.esp32.com/viewtopic.php?t=28594
+    mov reg, 32 ;amount of nops in table
+	sub reg, cycles_to_delay
+	mul reg, sizeof(2) 
+	add reg, nop_start
+	jmp [reg]
+nop_start:
+	nop.n
+	nop.n
+	[.. total of 32x nop]
+	nop.n
+	nop.n
+end: //we should be precisely on time here
+ */
 
     movi    a14, SYNC_PIN_REG
     movi    a15, SYNC_BIT_VAL
@@ -173,6 +197,11 @@ xt_highint5_L10:
 xt_highint5_L1:
     addi    a12, a12, -1                            // timeout runterzählen
     bnez    a12, xt_highint5_L2                     // noch kein timeout? --> gpio nochmal lesen
+
+    movi    a14, ABG_Scan_Line                      // Scanline laden
+    l32i    a14, a14, 0
+    addi    a14, a14, 1                             // Scanline +1
+    blti    a14, 16, xt_highint5_L3                 // Scanline <=15 ? dann direkt weiter zum Schreiben
 
 xt_highint5_L8:    
     movi    a14, 0                                  // Scanline=0

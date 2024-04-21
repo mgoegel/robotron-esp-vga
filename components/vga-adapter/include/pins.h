@@ -12,8 +12,8 @@
 #define PIN_NUM_VGA_VSYNC 17
 #define PIN_NUM_VGA_HSYNC 18
 
-#define PIN_NUM_ABG_BSYNC1 21
-#define PIN_NUM_ABG_BSYNC2 45
+#define PIN_NUM_ABG_BSYNC1 21  // SPI Pin
+#define PIN_NUM_ABG_BSYNC2 45  // ISR Pin, Negative Edge, Fallende Flanke
 #define PIN_NUM_ABG_VIDEO1 47
 #define PIN_NUM_ABG_VIDEO2 48
 

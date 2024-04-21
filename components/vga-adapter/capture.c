@@ -123,7 +123,7 @@ void IRAM_ATTR capture_task(void*)
 		int a=1000000;
 		while (((ABG_DMALIST[0] & 0x80000000) != 0) && ((ABG_DMALIST[4] & 0x80000000) != 0))  // darauf warten, dass der DMA-Kontroller den Transfer in den Puffer fertig meldet - der löscht das höchste Bit
 		{
-			if (bsyn_clock_last != bsyn_clock_diff && ABG_Scan_Line == 0)
+			if (bsyn_clock_last != bsyn_clock_diff && ABG_Scan_Line < 5)
 			{
 				// :200 Zeilen
 				// :240 MHz CPU-Takt
