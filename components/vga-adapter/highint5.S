@@ -28,19 +28,21 @@ xt_highint5:
 */
 
     /*
+        Glitchfilter
+
      128x NOP um das BSYNC Signal einschwingen zu lassen
      https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/api-reference/system/ulp_instruction_set.html
      NOP = 2 cycle to execute, 4 cycles to fetch next instruction
-     Delay bei 240MHz ca. 3,2µS
+     Delay bei 240MHz bei 8*16 ca. 3,2µS
      */
-    nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; ;nop
-    nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; ;nop
-    nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; ;nop
-    nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; ;nop
-    nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; ;nop
-    nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; ;nop
-    nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; ;nop
-    nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; ;nop
+    nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; ;nop  // 0,4µs
+    nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; ;nop  // 0,8µs - ZU lang  für 7100/EC1834
+    /*nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; ;nop  // 1,2µs
+    nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; ;nop  // 1,6µs
+    nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; ;nop  // 2µs
+    nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; ;nop  // 2,4µs
+    nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; ;nop  // 2,8µs
+    nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; ;nop  // 3,2µs */ 
 
 /*
     // Alternatives (konfigurierbares?) delay
@@ -69,7 +71,7 @@ end: //we should be precisely on time here
     int i = 48;
     while (gpio_get_level(PIN_NUM_ABG_BSYNC2)!=0 && i>0) i--;
 */
-    movi    a12, 100                                // Timeout-Counter (~10µs)
+    movi    a12, 55                                // Timeout-Counter (~5,5µs)
 xt_highint5_L2:
     l32i    a13, a14, 0                             // GPIO's lesen
     and     a13, a13, a15

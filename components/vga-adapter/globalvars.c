@@ -22,10 +22,10 @@ const struct SYSSTATIC _STATIC_SYS_VALS[] = {
 		.colors = {0b00001000, 0b00000100, 0, 0b00001100}, // 0b--rrggbb
 		.bits_per_sample = 4,
 		.xres = 640,
-		.yres = 400,
+		.yres = 299, /* 24 Zeilen (288 + Statuszeile) 299 im echten Leben*/
 		.interleave_mask = 0,
-		.default_pixel_abstand = 15567 /* schwankt bis auf 15588 */,
-		.default_start_line = 6,
+		.default_pixel_abstand = 15532 /* schwankt bis auf 15588 */,
+		.default_start_line = 21,
 		.default_pixel_per_line = 86410,
 	},
 	{ 
