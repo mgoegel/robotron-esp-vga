@@ -6,7 +6,7 @@
 
     .data
 Reg_Save:
-    .space      16
+    .space      24
 
     .section .iram1,"ax"
     .global     xt_highint5
@@ -14,222 +14,170 @@ Reg_Save:
     .align      4
 xt_highint5:
 
-    movi    a0, Reg_Save                            // Register sichern
+    // Register sichern
+    movi    a0, Reg_Save
     s32i    a15, a0, 0
     s32i    a14, a0, 4
     s32i    a13, a0, 8
     s32i    a12, a0, 12
+
 /*
-    // DEBUG auf GPIO14
-    movi    a14, (1 << 14)      // GPIO 14
-    movi    a13, GPIO_OUT_W1TS_REG
-    s32i    a14, a13, 0         // auf High
+    // DEBUG-Impuls auf GPIO14, bei Bedarf an beliebige Stelle kopieren
+    s32i    a12, a0, 16         // Register sichern
+    s32i    a13, a0, 20
+    movi    a13, (1 << 14)      // GPIO 14
+    movi    a12, GPIO_OUT_W1TS_REG
+    s32i    a13, a12, 0         // auf High
+    s32i    a13, a12, 4         // auf Low
+    l32i    a12, a0, 16         // Register wiederherstellen
+    l32i    a13, a0, 20
     // DEBUG Ende
 */
 
-    /*
-        Glitchfilter
+    // Scanline laden
+    movi    a14, ABG_Scan_Line                      // Adresse der Variable
+    l32i    a14, a14, 0                             // Wert der Variable
 
-     128x NOP um das BSYNC Signal einschwingen zu lassen
-     https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/api-reference/system/ulp_instruction_set.html
-     NOP = 2 cycle to execute, 4 cycles to fetch next instruction
-     Delay bei 240MHz bei 8*16 ca. 3,2µS
-     */
-    nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; ;nop  // 0,4µs
-    nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; ;nop  // 0,8µs - ZU lang  für 7100/EC1834
-    /*nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; ;nop  // 1,2µs
-    nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; ;nop  // 1,6µs
-    nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; ;nop  // 2µs
-    nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; ;nop  // 2,4µs
-    nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; ;nop  // 2,8µs
-    nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; ;nop  // 3,2µs */ 
+    // Scanline +1 hochzählen
+    addi    a14, a14, 1
 
-/*
-    // Alternatives (konfigurierbares?) delay
-    // https://www.esp32.com/viewtopic.php?t=28594
-    mov reg, 32 ;amount of nops in table
-	sub reg, cycles_to_delay
-	mul reg, sizeof(2) 
-	add reg, nop_start
-	jmp [reg]
-nop_start:
-	nop.n
-	nop.n
-	[.. total of 32x nop]
-	nop.n
-	nop.n
-end: //we should be precisely on time here
- */
+    // Behandlung des Interleaves: Zähler hochzählen
+    movi    a15, ABG_Interleave                     // Interleave-Zähler laden
+    l32i    a13, a15, 0
+    movi    a12, ABG_Interleave_Mask                // Interleave-Maske laden
+    l32i    a12, a12, 0
+    bnei    a14, 1, xt_highint5_L11                 // Wenn Scanline != 1, dann weiter
+    addi    a13, a13, 1                             // Interleave-Zähler +1
+    and     a13, a13, a12                           // mit Zähler UND-verknüpfen
+    s32i    a13, a15, 0                             // und speichern
+xt_highint5_L11:
 
-    movi    a14, SYNC_PIN_REG
-    movi    a15, SYNC_BIT_VAL
-    l32i    a13, a14, 0
-    and     a13, a13, a15
-    bnez    a13, xt_highint5_L9                     // Signal schon vorbei? War ein Störimpuls! --> Ende!
-
-/*
-    int i = 48;
-    while (gpio_get_level(PIN_NUM_ABG_BSYNC2)!=0 && i>0) i--;
-*/
+    // Warteschleife initialisieren
     movi    a12, 55                                // Timeout-Counter (~5,5µs)
-xt_highint5_L2:
-    l32i    a13, a14, 0                             // GPIO's lesen
-    and     a13, a13, a15
-    beqz    a13, xt_highint5_L1                     // immer noch low? --> zum timeout-test
 
-/*
-        if (ABG_Scan_Line == 10)
-        {
-            XTHAL_SET_CCOUNT(0);
-        }
-*/  
-    movi    a15, ABG_Scan_Line                      // Scanline laden
-    l32i    a14, a15, 0
+xt_highint5_L2:
+
+    // GPIO's lesen
+    movi    a13, SYNC_PIN_REG                       // Adresse vom GPIO-Port1
+    movi    a15, SYNC_BIT_VAL                       // nur 1 Bit davon
+    l32i    a13, a13, 0                             // Wert laden
+    and     a13, a13, a15                           // AND 1-Bitmuster
+    beqz    a13, xt_highint5_L1                     // alles 0 ? --> zum timeout-test
+
+    // bei Scanline 10 den CPU-Takt-Zähler speichern, und auf 0 setzen
+    // der Wert wird im Pixel-Debugger zur Berechnung der HSYNC-Frequenz verwendet
     bnei    a14, 10, xt_highint5_L4                 // wenn nicht 10, dann weiter
+    rsr.ccount a13                                  // Zähler auslesen
+    movi    a15, bsyn_clock_frame                   // Adresse der Variable
+    s32i    a13, a15, 0                             // Wert schreiben
     movi    a13, 0                                  // ansonsten ccount=0
     wsr.ccount a13
-
-/*
-        if (ABG_Scan_Line == 210)
-        {
-            bsyn_clock_diff = XTHAL_GET_CCOUNT();
-        }
-*/  
 xt_highint5_L4:
+
+    // bei Zeile 210 den CPU-Takt-Zähler auslesen und speichern, 
+    // der wird später für die Berechnung der Frequenzen und Pixelpositionen gebraucht
+    // wir haben damit genau die CPU-Takte für 200 Zeilen
     movi    a13, 210                                
     bne     a14, a13, xt_highint5_L5                // wenn nicht 210, dann weiter
     rsr.ccount a13                                  // ansonsten bsyn_clock_diff=ccount
-    movi    a15, bsyn_clock_diff
-    s32i    a13, a15, 0
-    memw
-
+    movi    a15, bsyn_clock_diff                    // Adresse der Variable
+    s32i    a13, a15, 0                             // Wert schreiben
 xt_highint5_L5:
-    movi    a15, ABG_Interleave                     // Interleave-Zähler laden
-    l32i    a13, a15, 0
-    bnez    a14, xt_highint5_L11                    // Wenn Scanline==0, dann Interleave-Zähler+1
-    addi    a13, a13, 1
-    movi    a12, ABG_Interleave_Mask
-    l32i    a12, a12, 0
-    and     a13, a13, a12
-    s32i    a13, a15, 0
 
-/*
-        ABG_Scan_Line++;
-*/
-xt_highint5_L11:
-    addi    a14, a14, 1                             // Scanline++
-
-    movi    a12, ABG_Interleave_Mask
+    // Testen, ob vom Interleave her diese Zeile eingelesen werden soll
+    movi    a13, ABG_Interleave                     // Interleave-Zähler laden
+    l32i    a13, a13, 0
+    movi    a12, ABG_Interleave_Mask                // Interleave-Maske laden
     l32i    a12, a12, 0
-    and     a15, a14, a12
+    and     a15, a14, a12                           // Scanline mit Interleave-Maske UND-Verknüpfen
     bne     a13, a15, xt_highint5_L3                // wenn Interleave-Zähler != Scanline --> Ende
 
-    movi    a13, 1000
-    beq     a14, a13, xt_highint5_L8
-
-/*
-        if (ABG_Scan_Line > ABG_START_LINE && ABG_RUN)
-*/  
+    // Testen, ob wir schon an der Startline vorbei sind
     movi    a15, ABG_START_LINE                     // Startline laden
     l32i    a15, a15, 0
     bge     a15, a14, xt_highint5_L3                // wenn Scanline<=Startline --> Ende
+
+    // Testen, ob das RUN-Flag gesetzt ist
     movi    a15, ABG_RUN                            // RUN-Flag laden
     l32i    a15, a15, 0
     beqz    a15, xt_highint5_L3                     // wenn RUN=0 --> Ende
 
-/*          if ((ABG_DMALIST[0] & 0x80000000) != 0)
-            {
-                ABG_DMALIST[3] = ABG_Scan_Line;
-            }
-*/
-    movi    a15, ABG_DMALIST
-    l32i    a15, a15, 0
-    movi    a13, 0x80000000
-    l32i    a12, a15, 0
-    and     a12, a12, a13
-    beqz    a12, xt_highint5_L6
-    s32i    a14, a15, 12
-    memw
+    // aktuelle Scanline in die DMA-Buffer-Parameter-Liste schreiben 
+    movi    a15, ABG_DMALIST                        // Zeiger auf Zeiger auf die Parameterliste vom DMA-Kontroller
+    l32i    a15, a15, 0                             // Zeiger laden
+    movi    a13, 0x80000000                         // Besetzt-Bit
+    l32i    a12, a15, 0                             // Parameter vom 1. Buffer laden
+    and     a12, a12, a13                           // Besetzt-Bit extrahieren
+    beqz    a12, xt_highint5_L6                     // besetzt? --> weiter
+    s32i    a14, a15, 12                            // wenn frei, dann Scanline schreiben
+    memw                                            // cache flush
 
-/*
-            if ((ABG_DMALIST[4] & 0x80000000) != 0)
-            {
-                ABG_DMALIST[7] = ABG_Scan_Line;
-            }
-*/
+
 xt_highint5_L6: 
-    l32i    a12, a15, 16
-    and     a12, a12, a13
-    beqz    a12, xt_highint5_L7
-    s32i    a14, a15, 28
-    memw
-
+    l32i    a12, a15, 16                            // Parameter von anderen Buffer laden
+    and     a12, a12, a13                           // Besetzt-Bit extrahieren
+    beqz    a12, xt_highint5_L7                     // besetzt? --> weiter
+    s32i    a14, a15, 28                            // wenn frei, dann Scanline schreiben
+    memw                                            // cache flush
+    // wenn beide Buffer frei sind, wird die Scanline in beide geschrieben. Das ist auf den ersten Blick unsinnig, aber
+    // wir können nicht genau sagen welchen Buffer der DMA-Kontroller nehmen wird. Also lieber in beide als in einen falschen.
 xt_highint5_L7:
 
-/*
-    usleep(?);
-*/
+    // eine kurze Warteschleife, wir müssen sicherstellen, dass der SPI/DMA mit der vorherigen Übertragung fertig ist
     movi    a12, 100
 xt_highint5_L10:
     addi    a12, a12, -1
     bnez    a12, xt_highint5_L10
 
-/*
-            REG_SET_BIT(GDMA_IN_LINK_CH1_REG, GDMA_INLINK_RESTART_CH1);
-*/
-    movi    a15, GDMA_IN_LINK_CH1_REG
-    movi    a13, GDMA_INLINK_RESTART_CH1
-    l32i    a12, a15, 0
-    or      a12, a12, a13
-    s32i    a12, a15, 0
-//    memw
+    // DMA-Kontroller neustarten
+    movi    a15, GDMA_IN_LINK_CH1_REG               // Adresse des DMA-Steuerregisters
+    movi    a13, GDMA_INLINK_RESTART_CH1            // Bit für Restart
+    l32i    a12, a15, 0                             // Register lesen
+    or      a12, a12, a13                           // Bit setzen (wird vom Kontroller selber wieder auf 0 gesetzt)
+    s32i    a12, a15, 0                             // Register schreiben
 
-/*
-            REG_SET_BIT(SPI_CMD_REG(2), SPI_USR);
-*/
-    movi    a15, DR_REG_SPI1_BASE + 0x22000
-    movi    a13, SPI_USR
-    l32i    a12, a15, 0
-    or      a12, a12, a13
-    s32i    a12, a15, 0
-//    memw
+    // SPI-Kontroller USR-Bit setzen (startet einlesen)
+    movi    a15, DR_REG_SPI1_BASE + 0x22000         // Adresse des SPI-Steuerregisters
+    movi    a13, SPI_USR                            // USR-Bit
+    l32i    a12, a15, 0                             // Register lesen
+    or      a12, a12, a13                           // Bit setzen (wird vom Kontroller selber wieder auf 0 gesetzt)
+    s32i    a12, a15, 0                             // Register schreiben
     
-    j       xt_highint5_L3
+    j       xt_highint5_L3                          // --> Ende
     
+    // BSYNC ist immer noch low! Ist das vielleicht ein VSYNC?
 xt_highint5_L1:
     addi    a12, a12, -1                            // timeout runterzählen
     bnez    a12, xt_highint5_L2                     // noch kein timeout? --> gpio nochmal lesen
 
-    movi    a14, ABG_Scan_Line                      // Scanline laden
-    l32i    a14, a14, 0
-    addi    a14, a14, 1                             // Scanline +1
-    blti    a14, 16, xt_highint5_L3                 // Scanline <=15 ? dann direkt weiter zum Schreiben
+    // die Zeit ist um! Das ist tatsächlich ein VSYNC!
+    blti    a14, 16, xt_highint5_L3                 // Scanline <=15 ? dann ist das nicht der erste VSYNC in diesem Frame!
 
-xt_highint5_L8:    
-    movi    a14, 0                                  // Scanline=0
-    
+    // Scanline auf 0 setzen
+    movi    a14, 0
+
 xt_highint5_L3:
     movi    a15, ABG_Scan_Line                      // Scanline schreiben
     s32i    a14, a15, 0
     memw
 
-xt_highint5_L9:    
-    movi    a14, SYNC_QUIT_REG
-    movi    a15, SYNC_BIT_VAL
-    s32i    a15, a14, 0                             // gpio interrupt quittieren
-    memw
-/*
-    // DEBUG auf GPIO14
-    movi    a14, (1 << 14)      // GPIO 14
-    movi    a13, GPIO_OUT_W1TS_REG
-    s32i    a14, a13, 4         // auf Low
-    // DEBUG Ende
-*/
-    l32i    a15, a0, 0                              // Register wiederherstellen
+    // GPIO Interrupt Quittieren
+    movi    a14, SYNC_QUIT_REG                      // Adresse Quitt-Register
+    movi    a15, SYNC_BIT_VAL                       // Bit GPIO
+    s32i    a15, a14, 0                             // Quittieren
+    memw                                            // cache flush!
+
+    movi a14, GPIO_STATUS_REG                       // Einfach nur Quittieren scheint nicht zu reichen. Diese 3 ansich unsinnigen 
+    l32i a14, a14, 0                                // Anweisungen stellen sicher, dass die Quittierung sofort wirksam wird, 
+    memw                                            // ansonsten wirkt die erst später, und es wird sofort noch ein 2. Interrupt ausgelöst
+
+    // Register wiederherstellen
+    l32i    a15, a0, 0                              
     l32i    a14, a0, 4
     l32i    a13, a0, 8
     l32i    a12, a0, 12
 
+    // Interrupt beenden
     rsr     a0, EXCSAVE_5
     rfi     5
 

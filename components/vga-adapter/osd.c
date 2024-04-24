@@ -203,6 +203,7 @@ bool restore_settings() {
 	ABG_YRes = _STATIC_SYS_VALS[nvs_mode].yres;
 	ABG_Bits_per_sample = _STATIC_SYS_VALS[nvs_mode].bits_per_sample;
 	printf("Zuweisung erledigt (%d, %f, %ld, %f)\n", ACTIVESYS, BSYNC_PIXEL_ABSTAND, ABG_START_LINE, ABG_PIXEL_PER_LINE);
+	DEBUG_MODE = _STATIC_SYS_VALS[nvs_mode].is_debugger;
 	return true;
 }
 
@@ -301,7 +302,7 @@ void osd_task(void*)
 			{
 				for (int h=0;h<20*640;h++) OSD_BUF[h]=0x0;
 			}
-			if (i>0 && ABG_RUN) i--;
+			if (i>0 && ABG_RUN && !DEBUG_MODE) i--;
 			j = 50;
 		}
 
@@ -391,4 +392,226 @@ void osd_task(void*)
 			}
 		}
 	}
+}
+
+// Text in den VGA-Buffer drucken
+static void vgadraw(char* txt, int count, int xpos, int ypos, char color)
+{
+	for (int a=0;a<count;a++)
+	{
+		for (int b=0;b<6;b++)
+		{
+			char c=CHARSET[(txt[a]-32)*6+b];
+			for (int d=0;d<7;d++)
+			{
+				VGA_BUF[b+(xpos+a)*7+(d+ypos*10)*ABG_XRes] = (((1 << d) & c) != 0) ? color : 0x00;
+			}
+		}
+	}
+}
+
+// Speicher für Debugger zuweisen und festen Teil des Debugger-Screens zeichnen
+void osd_setup_debugger()
+{
+	DEBUG_SCAN_BUF = heap_caps_malloc(4096 * 16, MALLOC_CAP_32BIT | MALLOC_CAP_INTERNAL);
+	DEBUG_HISTORY_BUF = heap_caps_malloc(4096*2*2*16, MALLOC_CAP_SPIRAM);
+
+	if (DEBUG_SCAN_BUF==0 || DEBUG_HISTORY_BUF==0)
+	{
+		DEBUG_MODE = false;
+		printf("Speicherzuordnung für Pixel-Debugger fehlgeschlagen!\n");
+		return;
+	}
+
+	for (int b=0;b<ABG_XRes*ABG_YRes;b++)  // VGA-Puffer leeren
+	{
+		VGA_BUF[b]=0;
+	}
+	vgadraw("Pixel-Debugger",14,0,0,0x3f);
+	for (int a=0;a<100;a++)
+	{
+		VGA_BUF[a+10*ABG_XRes]=0x3f;
+	}
+	vgadraw("HSync-Frequenz:",15,0,2,0x3c);
+	vgadraw("VSync-Frequenz:",15,0,4,0x3c);
+	vgadraw("Samples:",8,0,6,0x3c);
+	vgadraw("Feste Pixel  :",14,40,2,0x3c);
+	vgadraw("Flacker Pixel:",14,40,4,0x3c);
+}
+
+const int FRAMECOLOR = 0b000001;
+const int ERRORCOLOR = 0b110000;
+const int FLICKERCOLOR = 0b111010;
+const int STABLECOLOR = 0b001000;
+const int HITCOLOR = 0b001100;
+
+// dynamischen Teil des Debugger-Screens zeichnen
+void osd_draw_debugger()
+{
+	// Frequenzen schreiben
+	double hfreq = 48000000.0f / (double)bsyn_clock_diff; // 200 Zeilen * 240mhz = 48000000000
+	char tb[20];
+	int l = snprintf(tb, 20, "%.4f kHz    ",hfreq);
+	vgadraw(tb,l,16,2,0x3f);
+	hfreq = 240000000.0f / (double)bsyn_clock_frame; // 240mhz
+	l = snprintf(tb, 20, "%.4f Hz    ",hfreq);
+	vgadraw(tb,l,16,4,0x3f);
+
+	uint32_t hitcount = 0;		// Zähler feste Pixel
+	uint32_t flickercount = 0;	// Zähler flacker Pixel
+
+	// 16 Zeilen
+	for (uint8_t a=0;a<16;a++)
+	{
+		uint32_t b = (DEBUG_SCAN_BUF[a*4096] + (DEBUG_SCAN_BUF[a*4096+1]<<8)) - BSYNC_SAMPLE_ABSTAND; 		// nächster Pixel-Sample
+		uint32_t c = 0; 		// Pixel-Nummer
+		uint32_t d = b - 50; 	// aktueller Sample
+		uint32_t e = 0; 		// Sample, relativ zum Start
+		uint32_t h = 0; 		// VGA x
+		uint32_t i = 0; 		// VGA y
+
+		if (b>2*4096) return;
+		
+		while (d<b+50)
+		{
+			// Sample auspacken
+			uint8_t f = (d & 1)==0 ? DEBUG_SCAN_BUF[a*4096+(d>>1)]>>5 : DEBUG_SCAN_BUF[a*4096+(d>>1)]>>1;
+			f = f ^ ((DEBUG_SCAN_BUF[10]>>1) & 3);              // für den PC1715, der hat invertierte Color-Signale
+
+			// Sample-Statistik holen
+			uint8_t g1 = DEBUG_HISTORY_BUF[a*4096*2*2+(e*2)];	
+			uint8_t g2 = DEBUG_HISTORY_BUF[a*4096*2*2+(e*2)+1];
+
+			// Sample-Statistik bearbeiten
+			if ((f&1) == 0)										// Sample col1 aus?
+			{
+				if (g1>0) g1--;									// Statistik senken
+				if (g1>0x80) g1=0x80;							// damit kurze 0-Impulse die Statistik resetten
+			}
+			else												// Sample col1 ist an!
+			{
+				if (g1<0xff) g1++;								// Statistik erhöhen
+				if (g1<0x80) g1=0x80;							// damit kurze 1-Impulse die Statistik resetten
+			}
+			if ((f&2) == 0)										// und das selbe nochmal für col2
+			{
+				if (g2>0) g2--;
+				if (g2>0x80) g2=0x80;
+			}
+			else
+			{
+				if (g2<0xff) g2++;
+				if (g2<0x80) g2=0x80;
+			}
+			
+			// Statistik speichern
+			DEBUG_HISTORY_BUF[a*4096*2*2+(e*2)] = g1;			
+			DEBUG_HISTORY_BUF[a*4096*2*2+(e*2)+1] = g2;
+
+			// Sample Farbe für VGA anhand der Statistik setzen
+			uint8_t j = (d==b) ? FRAMECOLOR : 0;				// Hintergrund
+			if (g1 == 0xff)										// stabiles 1-Sample
+			{
+				if ((d==b))
+				{
+					j = HITCOLOR;
+					hitcount++;
+				}
+				else
+				{
+			 		j = STABLECOLOR; 
+				}
+			}
+			else if (g1 != 0x00)								// flackerndes Sample
+			{
+				if ((d==b))
+				{
+					j = ERRORCOLOR;
+					flickercount++;
+				}
+				else
+				{
+			 		j = FLICKERCOLOR; 
+				}
+			}
+			if (g2 == 0xff)										// das selbe nochmal mit col2
+			{
+				if ((d==b))
+				{
+					j = HITCOLOR;
+					hitcount++;
+				}
+				else
+				{
+			 		j = STABLECOLOR; 
+				}
+			}
+			else if (g2 != 0x00)
+			{
+				if ((d==b))
+				{
+					j = ERRORCOLOR;
+					flickercount++;
+				}
+				else
+				{
+			 		j = FLICKERCOLOR; 
+				}
+			}
+
+			// Sample in den VGA-Buffer zeichnen
+			VGA_BUF[(i+75+a)*ABG_XRes+h] = j;					
+			
+			// Rahmen zeichnen
+			if (a==0)
+			{
+				j = (d==b) ? FRAMECOLOR : 0;						
+				VGA_BUF[(i+72)*ABG_XRes+h] = FRAMECOLOR;
+				VGA_BUF[(i+73)*ABG_XRes+h] = j;
+				VGA_BUF[(i+74)*ABG_XRes+h] = j;
+				VGA_BUF[(i+91)*ABG_XRes+h] = j;
+				VGA_BUF[(i+92)*ABG_XRes+h] = j;
+				VGA_BUF[(i+93)*ABG_XRes+h] = FRAMECOLOR;
+			}
+
+			// Am Ende der VGA-Zeile zum nächsten Block springen
+			h++;
+			if (h>=ABG_XRes)
+			{
+				h = 0;
+				i+=25;
+			}
+
+			// Sample-Pixel zählen
+			if (d==b)
+			{
+				if (c<ABG_XRes)
+				{
+					b += PIXEL_STEP_LIST[c];
+				}
+				c++;
+			}
+			e++;
+			d++;
+		}
+	}
+
+	// Treffer-Statistik ausgeben
+	l = snprintf(tb, 20, "%ld       ",hitcount);
+	vgadraw(tb,l,55,2,0x3f);
+	l = snprintf(tb, 20, "%ld       ",flickercount);
+	vgadraw(tb,l,55,4,0x3f);
+}
+
+// Reaktion auf BSYN Timeout auf Debugger-Screen zeichnen
+void osd_timeout_debugger()
+{
+	vgadraw("Timeout!  ",10,16,2,0x30);
+	vgadraw("Timeout!  ",10,16,4,0x30);
+	for (int a=72*ABG_XRes;a<250*ABG_XRes;a++)
+	{
+		VGA_BUF[a] = 0;
+	}
+	vgadraw("          ",10,55,2,0x30);
+	vgadraw("          ",10,55,4,0x30);
 }
