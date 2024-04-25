@@ -15,6 +15,7 @@ struct SYSSTATIC {
 	uint32_t default_pixel_abstand;
 	uint32_t default_start_line;
 	uint32_t default_pixel_per_line;
+	bool is_debugger;
 };
 
 // Statische Werte vorinitialisiert
@@ -26,7 +27,7 @@ extern const struct SYSSTATIC _STATIC_SYS_VALS[];
 #define _NVS_SETTING_START_LINE	"SSTARTLINE(%d)"
 #define _NVS_SETTING_PIXEL_PER_LINE "SPIXPERLINE(%d)"
 
-#define _SETTINGS_COUNT 3 // Anzahl unterstützter Computer = 3 (A7100,PC1715,EC1835)
+#define _SETTINGS_COUNT 4 // Anzahl unterstützter Computer = 4 (A7100,PC1715,EC1835,Debugger)
 
 // globale Variablen
 
@@ -53,5 +54,9 @@ extern uint8_t* VGA_BUF;
 extern uint8_t* OSD_BUF;
 extern volatile uint32_t bsyn_clock_diff;
 extern volatile uint32_t bsyn_clock_last;
+extern volatile uint32_t bsyn_clock_frame;
 extern volatile uint32_t BSYNC_SAMPLE_ABSTAND;
 
+extern bool DEBUG_MODE;
+extern uint8_t* DEBUG_SCAN_BUF;
+extern uint8_t* DEBUG_HISTORY_BUF;

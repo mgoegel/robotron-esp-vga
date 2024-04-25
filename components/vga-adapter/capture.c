@@ -8,11 +8,15 @@
 #include <soc/spi_reg.h>
 #include "esp_intr_alloc.h"
 #include <rom/ets_sys.h>
+#include <string.h>
+
+#include "driver/gpio_filter.h"
 
 #include "capture.h"
 #include "globalvars.h"
 #include "main.h"
 #include "pins.h"
+#include "osd.h"
 
 // alles für die Abtastung der Video-Signale vom ABG mit SPI vorbereiten
 void setup_abg()
@@ -91,6 +95,20 @@ void setup_abg()
 	};
 	ESP_ERROR_CHECK(gpio_config(&pincfg));
 
+
+    gpio_glitch_filter_handle_t filter = NULL;
+    gpio_pin_glitch_filter_config_t config = 
+	{
+        .clk_src = GLITCH_FILTER_CLK_SRC_DEFAULT,
+		.gpio_num = PIN_NUM_ABG_BSYNC1,
+    };
+    ESP_ERROR_CHECK(gpio_new_pin_glitch_filter(&config, &filter));
+    ESP_ERROR_CHECK(gpio_glitch_filter_enable(filter));
+	config.gpio_num = PIN_NUM_ABG_BSYNC2;
+    ESP_ERROR_CHECK(gpio_new_pin_glitch_filter(&config, &filter));
+    ESP_ERROR_CHECK(gpio_glitch_filter_enable(filter));
+
+
 	ESP_INTR_DISABLE(31);
 	intr_matrix_set(1, ETS_GPIO_INTR_SOURCE, 31);  // Assembler ISR aktivieren
 	ESP_INTR_ENABLE(31);
@@ -106,6 +124,11 @@ void setup_abg()
 	};
 	ESP_ERROR_CHECK(gpio_config(&pincfg2));
 #endif
+
+	if (DEBUG_MODE)
+	{
+		osd_setup_debugger();
+	}
 }
 
 
@@ -113,6 +136,7 @@ void IRAM_ATTR capture_task(void*)
 {
 	setup_abg();
 	volatile uint32_t* next = ABG_DMALIST;
+	bool dr = false;
 
 	while (1)
 	{
@@ -164,9 +188,16 @@ void IRAM_ATTR capture_task(void*)
 
 			if (a==0)						 // Die Wartezeit ist abgelaufen!
 			{
-				for (int b=0;b<ABG_XRes*ABG_YRes;b++)  // VGA-Puffer leeren
+				if (DEBUG_MODE)
 				{
-				    VGA_BUF[b]=0;
+					osd_timeout_debugger();
+				}
+				else
+				{
+					for (int b=0;b<ABG_XRes*ABG_YRes;b++)  // VGA-Puffer leeren
+					{
+						VGA_BUF[b]=0;
+					}
 				}
 				a=1000000;
 				ABG_RUN = false;
@@ -238,44 +269,65 @@ void IRAM_ATTR capture_task(void*)
 			colors[i] = _STATIC_SYS_VALS[ACTIVESYS].colors[i];
 		}
 
-		// und nun die Pixel in den VGA-Puffer kopieren
-		if (sync>0 && line>=ABG_START_LINE && line<=ABG_START_LINE+(ABG_YRes-1))
+		if (DEBUG_MODE)
 		{
-			if (ABG_Bits_per_sample == 4)
+			if (line>=ABG_START_LINE && line<=ABG_START_LINE+17)
 			{
-				uint32_t bufpos = sync - BSYNC_SAMPLE_ABSTAND;
-				uint8_t* vgapos = (uint8_t*)((line - ABG_START_LINE)*ABG_XRes + (int)VGA_BUF);
-				uint8_t* stepende = (uint8_t*)((int)PIXEL_STEP_LIST + ABG_XRes);
-				for (uint8_t* steplist=PIXEL_STEP_LIST;steplist<stepende;steplist++)
-				{
-					if (bufpos & 1)
-					{
-						*vgapos = colors[((*((bufpos>>1)+buf))>>1) & 3];
-					}
-					else
-					{
-						*vgapos = colors[((*((bufpos>>1)+buf))>>5) & 3];
-					}
-					vgapos++;
-					bufpos+=*steplist;
-				}
+				uint8_t* buffer = (uint8_t*)((line - ABG_START_LINE-2)*4096 + (int)DEBUG_SCAN_BUF);
+				memcpy(buffer,buf,4096);
+				buffer[0] = sync & 0xff;
+				buffer[1] = sync >> 8;
+				dr = true;
 			}
-			else // 8 bit samples
+			if (line==ABG_START_LINE+18 && dr)
 			{
-				uint8_t* bufpos = (uint8_t*)((sync - BSYNC_SAMPLE_ABSTAND) + (int)buf);
-				uint8_t* vgapos = (uint8_t*)((line - ABG_START_LINE)*ABG_XRes + (int)VGA_BUF);
-				uint8_t* stepende = (uint8_t*)((int)PIXEL_STEP_LIST + ABG_XRes);
-				for (uint8_t* steplist=PIXEL_STEP_LIST;steplist<stepende;steplist++)
-				{
-					*vgapos = colors[(*bufpos)>>1 & 3];
-					vgapos++;
-					bufpos+=*steplist;
-				}
+				dr = false;
+				ABG_RUN = false;
+				osd_draw_debugger();
+				ABG_RUN = true;
 			}
 		}
 		else
 		{
-			BSYNC_SUCHE_START = (BSYNC_SAMPLE_ABSTAND>>1)+1;
+			// und nun die Pixel in den VGA-Puffer kopieren
+			if (sync>0 && line>=ABG_START_LINE && line<=ABG_START_LINE+(ABG_YRes-1))
+			{
+				if (ABG_Bits_per_sample == 4)
+				{
+					uint32_t bufpos = sync - BSYNC_SAMPLE_ABSTAND;
+					uint8_t* vgapos = (uint8_t*)((line - ABG_START_LINE)*ABG_XRes + (int)VGA_BUF);
+					uint8_t* stepende = (uint8_t*)((int)PIXEL_STEP_LIST + ABG_XRes);
+					for (uint8_t* steplist=PIXEL_STEP_LIST;steplist<stepende;steplist++)
+					{
+						if (bufpos & 1)
+						{
+							*vgapos = colors[((*((bufpos>>1)+buf))>>1) & 3];
+						}
+						else
+						{
+							*vgapos = colors[((*((bufpos>>1)+buf))>>5) & 3];
+						}
+						vgapos++;
+						bufpos+=*steplist;
+					}
+				}
+				else // 8 bit samples
+				{
+					uint8_t* bufpos = (uint8_t*)((sync - BSYNC_SAMPLE_ABSTAND) + (int)buf);
+					uint8_t* vgapos = (uint8_t*)((line - ABG_START_LINE)*ABG_XRes + (int)VGA_BUF);
+					uint8_t* stepende = (uint8_t*)((int)PIXEL_STEP_LIST + ABG_XRes);
+					for (uint8_t* steplist=PIXEL_STEP_LIST;steplist<stepende;steplist++)
+					{
+						*vgapos = colors[(*bufpos)>>1 & 3];
+						vgapos++;
+						bufpos+=*steplist;
+					}
+				}
+			}
+			else
+			{
+				BSYNC_SUCHE_START = (BSYNC_SAMPLE_ABSTAND>>1)+1;
+			}
 		}
 
 		// Puffer wieder für den DMA-Kontroller freigeben
