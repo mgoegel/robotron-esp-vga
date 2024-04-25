@@ -25,7 +25,7 @@ const struct SYSSTATIC _STATIC_SYS_VALS[] = {
 		.yres = 299, /* 24 Zeilen (288 + Statuszeile) 299 im echten Leben*/
 		.interleave_mask = 0,
 		.default_pixel_abstand = 15532 /* schwankt bis auf 15588 */,
-		.default_start_line = 21,
+		.default_start_line = 13,
 		.default_pixel_per_line = 86410,
 	},
 	{ 
@@ -35,7 +35,7 @@ const struct SYSSTATIC _STATIC_SYS_VALS[] = {
 		.xres = 720,
 		.yres = 350,
 		.interleave_mask = 0,
-		.default_pixel_abstand = 10747,     // Platzhalter, reale Parameter ermitteln!
+		.default_pixel_abstand = 10717,     // Platzhalter, reale Parameter ermitteln!
 		.default_start_line = 14,          // Platzhalter, reale Parameter ermitteln!
 		.default_pixel_per_line = 86400,   // Platzhalter, reale Parameter ermitteln!
 	}
