@@ -66,7 +66,8 @@ xt_highint5_L2:
 
     // bei Scanline 10 den CPU-Takt-Zähler speichern, und auf 0 setzen
     // der Wert wird im Pixel-Debugger zur Berechnung der HSYNC-Frequenz verwendet
-    bnei    a14, 10, xt_highint5_L4                 // wenn nicht 10, dann weiter
+    movi    a13, 20                                
+    bne     a14, a13, xt_highint5_L4                // wenn nicht 20, dann weiter
     rsr.ccount a13                                  // Zähler auslesen
     movi    a15, bsyn_clock_frame                   // Adresse der Variable
     s32i    a13, a15, 0                             // Wert schreiben
@@ -74,11 +75,11 @@ xt_highint5_L2:
     wsr.ccount a13
 xt_highint5_L4:
 
-    // bei Zeile 210 den CPU-Takt-Zähler auslesen und speichern, 
+    // bei Zeile 220 den CPU-Takt-Zähler auslesen und speichern, 
     // der wird später für die Berechnung der Frequenzen und Pixelpositionen gebraucht
     // wir haben damit genau die CPU-Takte für 200 Zeilen
-    movi    a13, 210                                
-    bne     a14, a13, xt_highint5_L5                // wenn nicht 210, dann weiter
+    movi    a13, 220                                
+    bne     a14, a13, xt_highint5_L5                // wenn nicht 220, dann weiter
     rsr.ccount a13                                  // ansonsten bsyn_clock_diff=ccount
     movi    a15, bsyn_clock_diff                    // Adresse der Variable
     s32i    a13, a15, 0                             // Wert schreiben
