@@ -26,7 +26,7 @@ const struct SYSSTATIC _STATIC_SYS_VALS[] = {
 		.yres = 299, /* 24 Zeilen (288 + Statuszeile) 299 im echten Leben*/
 		.interleave_mask = 0,
 		.default_pixel_abstand = 15532 /* schwankt bis auf 15588 */,
-		.default_start_line = 13,
+		.default_start_line = 24,
 		.default_pixel_per_line = 86410,
 		.is_debugger = false,
 	},
