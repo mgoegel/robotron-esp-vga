@@ -34,6 +34,20 @@ xt_highint5:
     // DEBUG Ende
 */
 
+    // warten, bis das BSYN-Signal sich nicht mehr ändert
+xt_highint5_L12:
+    movi    a14, 5                                  // Anzahl Schleifendurchgänge
+xt_highint5_L13:
+    mov     a12, a13                                // GPIO-Wert des letzen Durchgangs sichern. Beim ersten Durchgang steht hier Müll drin, das macht aber nichts
+    movi    a13, SYNC_PIN_REG                       // Adresse vom GPIO-Port1
+    movi    a15, SYNC_BIT_VAL                       // nur 1 Bit davon
+    l32i    a13, a13, 0                             // Wert laden
+    and     a13, a13, a15                           // AND 1-Bitmuster
+    bne     a12, a13, xt_highint5_L12               // Schleife von ganz vorn wiederholen, wenn sich der GPIO-Wert geändert hat
+    addi    a14, a14, -1                            // Schleifenzähler reduzieren
+    bnez    a14, xt_highint5_L13                    // bis 0 wiederholen
+    bnez    a13, xt_highint5_L14                    // sollte an der Stelle das BSYN bereits HIGH sein, dann war das ein Fehl-Interrupt: Ende
+
     // Scanline laden
     movi    a14, ABG_Scan_Line                      // Adresse der Variable
     l32i    a14, a14, 0                             // Wert der Variable
@@ -96,33 +110,12 @@ xt_highint5_L5:
     // Testen, ob wir schon an der Startline vorbei sind
     movi    a15, ABG_START_LINE                     // Startline laden
     l32i    a15, a15, 0
-    bge     a15, a14, xt_highint5_L3                // wenn Scanline<=Startline --> Ende
+    blt     a14, a15, xt_highint5_L3                // wenn Scanline<Startline --> Ende
 
     // Testen, ob das RUN-Flag gesetzt ist
     movi    a15, ABG_RUN                            // RUN-Flag laden
     l32i    a15, a15, 0
     beqz    a15, xt_highint5_L3                     // wenn RUN=0 --> Ende
-
-    // aktuelle Scanline in die DMA-Buffer-Parameter-Liste schreiben 
-    movi    a15, ABG_DMALIST                        // Zeiger auf Zeiger auf die Parameterliste vom DMA-Kontroller
-    l32i    a15, a15, 0                             // Zeiger laden
-    movi    a13, 0x80000000                         // Besetzt-Bit
-    l32i    a12, a15, 0                             // Parameter vom 1. Buffer laden
-    and     a12, a12, a13                           // Besetzt-Bit extrahieren
-    beqz    a12, xt_highint5_L6                     // besetzt? --> weiter
-    s32i    a14, a15, 12                            // wenn frei, dann Scanline schreiben
-    memw                                            // cache flush
-
-
-xt_highint5_L6: 
-    l32i    a12, a15, 16                            // Parameter von anderen Buffer laden
-    and     a12, a12, a13                           // Besetzt-Bit extrahieren
-    beqz    a12, xt_highint5_L7                     // besetzt? --> weiter
-    s32i    a14, a15, 28                            // wenn frei, dann Scanline schreiben
-    memw                                            // cache flush
-    // wenn beide Buffer frei sind, wird die Scanline in beide geschrieben. Das ist auf den ersten Blick unsinnig, aber
-    // wir können nicht genau sagen welchen Buffer der DMA-Kontroller nehmen wird. Also lieber in beide als in einen falschen.
-xt_highint5_L7:
 
     // eine kurze Warteschleife, wir müssen sicherstellen, dass der SPI/DMA mit der vorherigen Übertragung fertig ist
     movi    a12, 100
@@ -130,11 +123,27 @@ xt_highint5_L10:
     addi    a12, a12, -1
     bnez    a12, xt_highint5_L10
 
+    // DMA-Buffer-Parameter-Liste bearbeiten
+    movi    a15, ABG_DMALIST                        // Zeiger auf Zeiger auf die Parameterliste vom DMA-Kontroller
+    l32i    a15, a15, 0                             // Zeiger laden
+    movi    a13, 0xc0000000                         // Frei-Kennung
+    l32i    a12, a15, 0                             // Parameter vom 1. Buffer laden
+    beq     a12, a13, xt_highint5_L6                // Frei? --> L6
+    addi    a15, a15, 16                            // ein Buffer weiter
+    l32i    a12, a15, 0                             // Parameter vom 2. Buffer laden
+    bne     a12, a13, xt_highint5_L3                // auch nicht frei? --> L3
+xt_highint5_L6:
+    movi    a13, 0xc0ffffff                         // DMA-Parameter
+    s32i    a13, a15, 0                             // in die Parameterliste schreiben
+    s32i    a14, a15, 12                            // Scanline an die Parameterliste schreiben
+    memw                                            // cache flush
+    movi    a13, 0xfffff
+    and     a12, a15, a13                           // 20 bits von der Parameterliste-Adresse trennen
+
     // DMA-Kontroller neustarten
     movi    a15, GDMA_IN_LINK_CH1_REG               // Adresse des DMA-Steuerregisters
-    movi    a13, GDMA_INLINK_RESTART_CH1            // Bit für Restart
-    l32i    a12, a15, 0                             // Register lesen
-    or      a12, a12, a13                           // Bit setzen (wird vom Kontroller selber wieder auf 0 gesetzt)
+    movi    a13, GDMA_INLINK_START_CH1              // Bit für Start
+    or      a12, a12, a13                           // Start-Bit setzen + Adresse von Parameterliste
     s32i    a12, a15, 0                             // Register schreiben
 
     // SPI-Kontroller USR-Bit setzen (startet einlesen)
@@ -162,6 +171,7 @@ xt_highint5_L3:
     s32i    a14, a15, 0
     memw
 
+xt_highint5_L14:
     // GPIO Interrupt Quittieren
     movi    a14, SYNC_QUIT_REG                      // Adresse Quitt-Register
     movi    a15, SYNC_BIT_VAL                       // Bit GPIO
