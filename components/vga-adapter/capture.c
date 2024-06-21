@@ -67,12 +67,14 @@ void setup_abg()
 	ESP_ERROR_CHECK(spi_device_queue_trans(spi, &transfer, 0));
 
 	// Aus dieser Tabelle nimmt der DMA-Kontroller die Speicheraddressen
-	ABG_DMALIST[0] = 0x80ffffff;
+	ABG_DMALIST[0] = 0xc0000000;
 	ABG_DMALIST[1] = (int)ABG_PIXBUF1;
-	ABG_DMALIST[2] = (int)&ABG_DMALIST[4];
-	ABG_DMALIST[4] = 0x80ffffff;
+	ABG_DMALIST[2] = 0;
+	ABG_DMALIST[3] = 0;
+	ABG_DMALIST[4] = 0xc0000000;
 	ABG_DMALIST[5] = (int)ABG_PIXBUF2;
-	ABG_DMALIST[6] = (int)&ABG_DMALIST[0];
+	ABG_DMALIST[6] = 0;
+	ABG_DMALIST[7] = 0;
 
 	// normalerweise nimmt der SPI-Kontroller bei diesem Projekt den DMA-Kanal 1. Sicher sein kann man sich da nicht - also überprüfen.
 	assert(REG_READ(GDMA_IN_PERI_SEL_CH1_REG) == 0);
@@ -201,6 +203,9 @@ void IRAM_ATTR capture_task(void*)
 				}
 				a=1000000;
 				ABG_RUN = false;
+				ABG_DMALIST[0] = 0xc0000000;
+				ABG_DMALIST[4] = 0xc0000000;
+				bsyn_clock_last = 0;
 			}
 			a--;
 		}
@@ -217,120 +222,124 @@ void IRAM_ATTR capture_task(void*)
 #ifdef PIN_NUM_DEBUG_COPY
 		gpio_set_level(PIN_NUM_DEBUG_COPY,1);
 #endif
-		// Anzahl der empfangenen Bytes, wird vom DMA-Kontroller gesetzt
-		int b=(next[0] & 0xfff000) >> 12;
-
-		int sync = 0;
-		uint8_t* buf = (uint8_t*)next[1];
-
-		if ((buf[BSYNC_SUCHE_START] & 0x08)!=0x08)
-		{
-			BSYNC_SUCHE_START = (BSYNC_SAMPLE_ABSTAND>>1)+1;
-		}
-
-		// Wir suchen den nächsten BSYNC-Impuls
-
-
-		if (ABG_Bits_per_sample == 4)
-		{
-			for (int a=BSYNC_SUCHE_START; a<b; a++)
-			{
-				if ((buf[a] & 0x88)!=0x88)
-				{
-					sync = a * 2;  // gefunden!
-					if ((buf[a] & 0x88) == 0x80)
-					{
-						sync++;
-					}
-					BSYNC_SUCHE_START = a - 20;
-					break;
-				}
-			}
-		}
-		else
-		{
-			for (int a=BSYNC_SUCHE_START; a<b; a++)
-			{
-				if ((buf[a] & 0x08)!=0x08)
-				{
-					sync = a;  // gefunden!
-					BSYNC_SUCHE_START = a - 20;
-					break;
-				}
-			}
-		}
 
 		uint32_t line = next[3];
 
-		// _STATIC_SYS_VALS liegt jetzt im externen Flash-Rom - für die Kopierschleife etwas zu langsam
-		uint8_t colors[4];
-		for (int i=0;i<4;i++)
+		if (line>=ABG_START_LINE && line<=ABG_START_LINE+(ABG_YRes-1))
 		{
-			colors[i] = _STATIC_SYS_VALS[ACTIVESYS].colors[i];
-		}
+			// Anzahl der empfangenen Bytes, wird vom DMA-Kontroller gesetzt
+			int b=(next[0] & 0xfff000) >> 12;
 
-		if (DEBUG_MODE)
-		{
-			if (line>=ABG_START_LINE && line<=ABG_START_LINE+17)
+			int sync = 0;
+			uint8_t* buf = (uint8_t*)next[1];
+
+			if ((buf[BSYNC_SUCHE_START] & 0x08)!=0x08)
 			{
-				uint8_t* buffer = (uint8_t*)((line - ABG_START_LINE-2)*4096 + (int)DEBUG_SCAN_BUF);
-				memcpy(buffer,buf,4096);
-				buffer[0] = sync & 0xff;
-				buffer[1] = sync >> 8;
-				dr = true;
+				BSYNC_SUCHE_START = (BSYNC_SAMPLE_ABSTAND>>1)+1;
 			}
-			if (line==ABG_START_LINE+18 && dr)
+
+			// Wir suchen den nächsten BSYNC-Impuls
+			if (ABG_Bits_per_sample == 4)
 			{
-				dr = false;
-				ABG_RUN = false;
-				osd_draw_debugger();
-				ABG_RUN = true;
-			}
-		}
-		else
-		{
-			// und nun die Pixel in den VGA-Puffer kopieren
-			if (sync>0 && line>=ABG_START_LINE && line<=ABG_START_LINE+(ABG_YRes-1))
-			{
-				if (ABG_Bits_per_sample == 4)
+				for (int a=BSYNC_SUCHE_START; a<b; a++)
 				{
-					uint32_t bufpos = sync - BSYNC_SAMPLE_ABSTAND;
-					uint8_t* vgapos = (uint8_t*)((line - ABG_START_LINE)*ABG_XRes + (int)VGA_BUF);
-					uint8_t* stepende = (uint8_t*)((int)PIXEL_STEP_LIST + ABG_XRes);
-					for (uint8_t* steplist=PIXEL_STEP_LIST;steplist<stepende;steplist++)
+					if ((buf[a] & 0x88)!=0x88)
 					{
-						if (bufpos & 1)
+						sync = a * 2;  // gefunden!
+						if ((buf[a] & 0x88) == 0x80)
 						{
-							*vgapos = colors[((*((bufpos>>1)+buf))>>1) & 3];
+							sync++;
 						}
-						else
-						{
-							*vgapos = colors[((*((bufpos>>1)+buf))>>5) & 3];
-						}
-						vgapos++;
-						bufpos+=*steplist;
-					}
-				}
-				else // 8 bit samples
-				{
-					uint8_t* bufpos = (uint8_t*)((sync - BSYNC_SAMPLE_ABSTAND) + (int)buf);
-					uint8_t* vgapos = (uint8_t*)((line - ABG_START_LINE)*ABG_XRes + (int)VGA_BUF);
-					uint8_t* stepende = (uint8_t*)((int)PIXEL_STEP_LIST + ABG_XRes);
-					for (uint8_t* steplist=PIXEL_STEP_LIST;steplist<stepende;steplist++)
-					{
-						*vgapos = colors[(*bufpos)>>1 & 3];
-						vgapos++;
-						bufpos+=*steplist;
+						BSYNC_SUCHE_START = a - 20;
+						break;
 					}
 				}
 			}
 			else
 			{
-				BSYNC_SUCHE_START = (BSYNC_SAMPLE_ABSTAND>>1)+1;
+				for (int a=BSYNC_SUCHE_START; a<b; a++)
+				{
+					if ((buf[a] & 0x08)!=0x08)
+					{
+						sync = a;  // gefunden!
+						BSYNC_SUCHE_START = a - 20;
+						break;
+					}
+				}
+			}
+
+			// _STATIC_SYS_VALS liegt jetzt im externen Flash-Rom - für die Kopierschleife etwas zu langsam
+			uint8_t colors[4];
+			for (int i=0;i<4;i++)
+			{
+				colors[i] = _STATIC_SYS_VALS[ACTIVESYS].colors[i];
+			}
+
+			if (DEBUG_MODE)
+			{
+				if (line>=ABG_START_LINE && line<=ABG_START_LINE+17)
+				{
+					// die Samples in den Debug-Buffer kopieren.
+					uint8_t* buffer = (uint8_t*)((line - ABG_START_LINE)*4096 + (int)DEBUG_SCAN_BUF);
+					memcpy(buffer,buf,4096);
+					buffer[0] = sync & 0xff;
+					buffer[1] = sync >> 8;
+					dr = true;
+				}
+				if (line==ABG_START_LINE+18 && dr)
+				{
+					// Debug-Buffer auswerten
+					dr = false;
+					ABG_RUN = false;
+					osd_draw_debugger();
+					ABG_RUN = true;
+				}
+			}
+			else
+			{
+				// und nun die Pixel in den VGA-Puffer kopieren
+				if (sync>0)
+				{
+					if (ABG_Bits_per_sample == 4)
+					{
+						uint32_t bufpos = sync - BSYNC_SAMPLE_ABSTAND;
+						uint8_t* vgapos = (uint8_t*)((line - ABG_START_LINE)*ABG_XRes + (int)VGA_BUF);
+						uint8_t* stepende = (uint8_t*)((int)PIXEL_STEP_LIST + ABG_XRes);
+						for (uint8_t* steplist=PIXEL_STEP_LIST;steplist<stepende;steplist++)
+						{
+							if (bufpos & 1)
+							{
+								*vgapos = colors[((*((bufpos>>1)+buf))>>1) & 3];
+							}
+							else
+							{
+								*vgapos = colors[((*((bufpos>>1)+buf))>>5) & 3];
+							}
+							vgapos++;
+							bufpos+=*steplist;
+						}
+					}
+					else // 8 bit samples
+					{
+						uint8_t* bufpos = (uint8_t*)((sync - BSYNC_SAMPLE_ABSTAND) + (int)buf);
+						uint8_t* vgapos = (uint8_t*)((line - ABG_START_LINE)*ABG_XRes + (int)VGA_BUF);
+						uint8_t* stepende = (uint8_t*)((int)PIXEL_STEP_LIST + ABG_XRes);
+						for (uint8_t* steplist=PIXEL_STEP_LIST;steplist<stepende;steplist++)
+						{
+							*vgapos = colors[(*bufpos)>>1 & 3];
+							vgapos++;
+							bufpos+=*steplist;
+						}
+					}
+				}
+				else
+				{
+					BSYNC_SUCHE_START = (BSYNC_SAMPLE_ABSTAND>>1)+1;
+				}
 			}
 		}
 
-		// Puffer wieder für den DMA-Kontroller freigeben
-		next[0]=0x80ffffff;
+		// Puffer für den ISR freigeben
+		next[0]=0xc0000000;
 	}
 }
