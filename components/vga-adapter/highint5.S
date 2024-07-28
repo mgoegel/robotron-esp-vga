@@ -33,7 +33,7 @@ xt_highint5:
     l32i    a13, a0, 20
     // DEBUG Ende
 */
-
+/*  dieser Softwar-Filter scheint eher kontraproduktiv zu sein, deshalb erstmal deaktiviert
     // warten, bis das BSYN-Signal sich nicht mehr ändert
 xt_highint5_L12:
     movi    a14, 5                                  // Anzahl Schleifendurchgänge
@@ -47,6 +47,12 @@ xt_highint5_L13:
     addi    a14, a14, -1                            // Schleifenzähler reduzieren
     bnez    a14, xt_highint5_L13                    // bis 0 wiederholen
     bnez    a13, xt_highint5_L14                    // sollte an der Stelle das BSYN bereits HIGH sein, dann war das ein Fehl-Interrupt: Ende
+*/
+
+    // SPI Transfer stoppen
+    movi    a15, DR_REG_SPI1_BASE + 0x22000         // Adresse des SPI-Steuerregisters
+    movi    a13, 0
+    s32i    a13, a15, 0
 
     // Scanline laden
     movi    a14, ABG_Scan_Line                      // Adresse der Variable
@@ -146,9 +152,13 @@ xt_highint5_L6:
     or      a12, a12, a13                           // Start-Bit setzen + Adresse von Parameterliste
     s32i    a12, a15, 0                             // Register schreiben
 
-    // SPI-Kontroller USR-Bit setzen (startet einlesen)
+    // SPI-Interrupt-Flaggs resetten, der DMA macht sonst ab und zu Fehler
     movi    a15, DR_REG_SPI1_BASE + 0x22000         // Adresse des SPI-Steuerregisters
-    movi    a13, SPI_USR                            // USR-Bit
+    movi    a12, 0xffffffff
+    s32i    a12, a15, 0x38                          // SPI_DMA_INT_CLR_REG
+
+    // SPI-Kontroller USR-Bit setzen (startet einlesen)
+    movi    a13, SPI_USR | SPI_UPDATE               // USR-Bit und UPDATE-Bit
     l32i    a12, a15, 0                             // Register lesen
     or      a12, a12, a13                           // Bit setzen (wird vom Kontroller selber wieder auf 0 gesetzt)
     s32i    a12, a15, 0                             // Register schreiben

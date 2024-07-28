@@ -48,7 +48,6 @@ extern uint16_t ABG_XRes;
 extern uint16_t ABG_YRes;
 extern uint8_t ABG_Bits_per_sample;
 
-extern int BSYNC_SUCHE_START;
 extern uint8_t* PIXEL_STEP_LIST;
 extern uint8_t* VGA_BUF;
 extern uint8_t* OSD_BUF;

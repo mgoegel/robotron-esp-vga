@@ -73,7 +73,6 @@ uint16_t ABG_XRes = 0;
 uint16_t ABG_YRes = 0;
 uint8_t ABG_Bits_per_sample = 0;
 
-int BSYNC_SUCHE_START = 0;
 uint8_t* PIXEL_STEP_LIST;
 uint8_t* VGA_BUF;
 uint8_t* OSD_BUF;

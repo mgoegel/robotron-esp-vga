@@ -34,7 +34,7 @@ void setup_abg()
 		.data1_io_num = PIN_NUM_ABG_VIDEO1,  // Farb-Signal
     	.data2_io_num = PIN_NUM_ABG_VIDEO2,  // Farb-Signal
     	.data3_io_num = PIN_NUM_ABG_BSYNC1,  // wir zeichnen auch das BSYN auf, daran können wir später die Spalten ausrichten
-    	.max_transfer_sz = 4092,
+    	.max_transfer_sz = 4096,
     	.flags = SPICOMMON_BUSFLAG_MASTER | SPICOMMON_BUSFLAG_GPIO_PINS,
     };
 	ESP_ERROR_CHECK(spi_bus_initialize(SPI2_HOST, &buscfg, SPI_DMA_CH_AUTO));
@@ -59,7 +59,7 @@ void setup_abg()
 	{
 	    .flags = (ABG_Bits_per_sample == 4) ? SPI_TRANS_MODE_QIO : SPI_TRANS_MODE_OCT,           // 4 oder 8 Bit gleichzeitig einlesen
 	    .length = 0,                           // nix ausgeben...
-	    .rxlength = 1000,                      // Platzhalter, wird später aus dem hsync-timing errechnet
+	    .rxlength = 4096 * 8,
 	    .rx_buffer = ABG_PIXBUF1,
 	};
 
@@ -174,14 +174,6 @@ void IRAM_ATTR capture_task(void*)
 					last = istep;
 				}
 
-				// :200 Zeilen
-				// :240 MHz CPU-Takt
-				// *80 MHz Sample Rate
-				// *4 Bit per Sample
-				// = 150
-				int spi_len = (bsyn_clock_diff / ((ABG_Bits_per_sample == 4) ? 150 : 75)) - 600;
-				REG_SET_FIELD(SPI_MS_DLEN_REG(2), SPI_MS_DATA_BITLEN, spi_len);
-				REG_SET_BIT(SPI_CMD_REG(2), SPI_UPDATE);
 				ABG_RUN = true;
 #ifdef PIN_NUM_DEBUG_COPY
 		gpio_set_level(PIN_NUM_DEBUG_COPY,0);
@@ -233,15 +225,10 @@ void IRAM_ATTR capture_task(void*)
 			int sync = 0;
 			uint8_t* buf = (uint8_t*)next[1];
 
-			if ((buf[BSYNC_SUCHE_START] & 0x08)!=0x08)
-			{
-				BSYNC_SUCHE_START = (BSYNC_SAMPLE_ABSTAND>>1)+1;
-			}
-
 			// Wir suchen den nächsten BSYNC-Impuls
 			if (ABG_Bits_per_sample == 4)
 			{
-				for (int a=BSYNC_SUCHE_START; a<b; a++)
+				for (int a=b-25; a<b; a++)
 				{
 					if ((buf[a] & 0x88)!=0x88)
 					{
@@ -250,19 +237,17 @@ void IRAM_ATTR capture_task(void*)
 						{
 							sync++;
 						}
-						BSYNC_SUCHE_START = a - 20;
 						break;
 					}
 				}
 			}
 			else
 			{
-				for (int a=BSYNC_SUCHE_START; a<b; a++)
+				for (int a=b-50; a<b; a++)
 				{
 					if ((buf[a] & 0x08)!=0x08)
 					{
 						sync = a;  // gefunden!
-						BSYNC_SUCHE_START = a - 20;
 						break;
 					}
 				}
@@ -331,10 +316,6 @@ void IRAM_ATTR capture_task(void*)
 							bufpos+=*steplist;
 						}
 					}
-				}
-				else
-				{
-					BSYNC_SUCHE_START = (BSYNC_SAMPLE_ABSTAND>>1)+1;
 				}
 			}
 		}
