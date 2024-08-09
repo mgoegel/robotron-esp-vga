@@ -16,7 +16,6 @@ const struct SYSSTATIC _STATIC_SYS_VALS[] = {
 		.default_pixel_abstand = 8950,
 		.default_start_line = 32,
 		.default_pixel_per_line = 73600,
-		.is_debugger = false,
 	},
 	{ 
 		.name = "PC1715",
@@ -28,7 +27,6 @@ const struct SYSSTATIC _STATIC_SYS_VALS[] = {
 		.default_pixel_abstand = 15532 /* schwankt bis auf 15588 */,
 		.default_start_line = 24,
 		.default_pixel_per_line = 86410,
-		.is_debugger = false,
 	},
 	{ 
 		.name = "EC1834",
@@ -40,19 +38,6 @@ const struct SYSSTATIC _STATIC_SYS_VALS[] = {
 		.default_pixel_abstand = 10717,
 		.default_start_line = 18,
 		.default_pixel_per_line = 86400,
-		.is_debugger = false,
-	},	
-	{ 
-		.name = "Debugger",
-		.colors = {0, 0b00000100, 0b00001000, 0b00001100}, // 0b--rrggbb
-		.bits_per_sample = 4,
-		.xres = 640,
-		.yres = 250,
-		.interleave_mask = 0,
-		.default_pixel_abstand = 9010,
-		.default_start_line = 29,
-		.default_pixel_per_line = 73600,
-		.is_debugger = true,
 	}
 };
 
@@ -80,7 +65,4 @@ volatile uint32_t bsyn_clock_diff = 0;
 volatile uint32_t bsyn_clock_last = 0;
 volatile uint32_t bsyn_clock_frame = 0;
 volatile uint32_t BSYNC_SAMPLE_ABSTAND = 0;
-bool DEBUG_MODE = false;
-uint8_t* DEBUG_SCAN_BUF;
-uint8_t* DEBUG_HISTORY_BUF;
 

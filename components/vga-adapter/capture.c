@@ -59,7 +59,7 @@ void setup_abg()
 	{
 	    .flags = (ABG_Bits_per_sample == 4) ? SPI_TRANS_MODE_QIO : SPI_TRANS_MODE_OCT,           // 4 oder 8 Bit gleichzeitig einlesen
 	    .length = 0,                           // nix ausgeben...
-	    .rxlength = 4096 * 8,
+	    .rxlength = 4090 * 8,
 	    .rx_buffer = ABG_PIXBUF1,
 	};
 
@@ -127,10 +127,16 @@ void setup_abg()
 	ESP_ERROR_CHECK(gpio_config(&pincfg2));
 #endif
 
-	if (DEBUG_MODE)
+	gpio_config_t pincfg3 =
 	{
-		osd_setup_debugger();
-	}
+	    .pin_bit_mask = 1ULL << PIN_NUM_LED_WIFI | 1ULL << PIN_NUM_LED_SYNC,
+	    .mode = GPIO_MODE_OUTPUT,
+	    .pull_up_en = false,
+	    .pull_down_en = false,
+	};
+	ESP_ERROR_CHECK(gpio_config(&pincfg3));
+	gpio_set_level(PIN_NUM_LED_WIFI,0);
+	gpio_set_level(PIN_NUM_LED_SYNC,0);
 }
 
 
@@ -138,7 +144,6 @@ void IRAM_ATTR capture_task(void*)
 {
 	setup_abg();
 	volatile uint32_t* next = ABG_DMALIST;
-	bool dr = false;
 
 	while (1)
 	{
@@ -175,6 +180,7 @@ void IRAM_ATTR capture_task(void*)
 				}
 
 				ABG_RUN = true;
+				gpio_set_level(PIN_NUM_LED_SYNC,1);
 #ifdef PIN_NUM_DEBUG_COPY
 		gpio_set_level(PIN_NUM_DEBUG_COPY,0);
 #endif
@@ -182,22 +188,17 @@ void IRAM_ATTR capture_task(void*)
 
 			if (a==0)						 // Die Wartezeit ist abgelaufen!
 			{
-				if (DEBUG_MODE)
+				for (int b=0;b<ABG_XRes*ABG_YRes;b++)  // VGA-Puffer leeren
 				{
-					osd_timeout_debugger();
-				}
-				else
-				{
-					for (int b=0;b<ABG_XRes*ABG_YRes;b++)  // VGA-Puffer leeren
-					{
-						VGA_BUF[b]=0;
-					}
+					VGA_BUF[b]=0;
 				}
 				a=1000000;
 				ABG_RUN = false;
 				ABG_DMALIST[0] = 0xc0000000;
 				ABG_DMALIST[4] = 0xc0000000;
 				bsyn_clock_last = 0;
+				bsyn_clock_diff = 0;
+				gpio_set_level(PIN_NUM_LED_SYNC,0);
 			}
 			a--;
 		}
@@ -260,61 +261,38 @@ void IRAM_ATTR capture_task(void*)
 				colors[i] = _STATIC_SYS_VALS[ACTIVESYS].colors[i];
 			}
 
-			if (DEBUG_MODE)
+			// und nun die Pixel in den VGA-Puffer kopieren
+			if (sync>0)
 			{
-				if (line>=ABG_START_LINE && line<=ABG_START_LINE+17)
+				if (ABG_Bits_per_sample == 4)
 				{
-					// die Samples in den Debug-Buffer kopieren.
-					uint8_t* buffer = (uint8_t*)((line - ABG_START_LINE)*4096 + (int)DEBUG_SCAN_BUF);
-					memcpy(buffer,buf,4096);
-					buffer[0] = sync & 0xff;
-					buffer[1] = sync >> 8;
-					dr = true;
-				}
-				if (line==ABG_START_LINE+18 && dr)
-				{
-					// Debug-Buffer auswerten
-					dr = false;
-					ABG_RUN = false;
-					osd_draw_debugger();
-					ABG_RUN = true;
-				}
-			}
-			else
-			{
-				// und nun die Pixel in den VGA-Puffer kopieren
-				if (sync>0)
-				{
-					if (ABG_Bits_per_sample == 4)
+					uint32_t bufpos = sync - BSYNC_SAMPLE_ABSTAND;
+					uint8_t* vgapos = (uint8_t*)((line - ABG_START_LINE)*ABG_XRes + (int)VGA_BUF);
+					uint8_t* stepende = (uint8_t*)((int)PIXEL_STEP_LIST + ABG_XRes);
+					for (uint8_t* steplist=PIXEL_STEP_LIST;steplist<stepende;steplist++)
 					{
-						uint32_t bufpos = sync - BSYNC_SAMPLE_ABSTAND;
-						uint8_t* vgapos = (uint8_t*)((line - ABG_START_LINE)*ABG_XRes + (int)VGA_BUF);
-						uint8_t* stepende = (uint8_t*)((int)PIXEL_STEP_LIST + ABG_XRes);
-						for (uint8_t* steplist=PIXEL_STEP_LIST;steplist<stepende;steplist++)
+						if (bufpos & 1)
 						{
-							if (bufpos & 1)
-							{
-								*vgapos = colors[((*((bufpos>>1)+buf))>>1) & 3];
-							}
-							else
-							{
-								*vgapos = colors[((*((bufpos>>1)+buf))>>5) & 3];
-							}
-							vgapos++;
-							bufpos+=*steplist;
+							*vgapos = colors[((*((bufpos>>1)+buf))>>1) & 3];
 						}
+						else
+						{
+							*vgapos = colors[((*((bufpos>>1)+buf))>>5) & 3];
+						}
+						vgapos++;
+						bufpos+=*steplist;
 					}
-					else // 8 bit samples
+				}
+				else // 8 bit samples
+				{
+					uint8_t* bufpos = (uint8_t*)((sync - BSYNC_SAMPLE_ABSTAND) + (int)buf);
+					uint8_t* vgapos = (uint8_t*)((line - ABG_START_LINE)*ABG_XRes + (int)VGA_BUF);
+					uint8_t* stepende = (uint8_t*)((int)PIXEL_STEP_LIST + ABG_XRes);
+					for (uint8_t* steplist=PIXEL_STEP_LIST;steplist<stepende;steplist++)
 					{
-						uint8_t* bufpos = (uint8_t*)((sync - BSYNC_SAMPLE_ABSTAND) + (int)buf);
-						uint8_t* vgapos = (uint8_t*)((line - ABG_START_LINE)*ABG_XRes + (int)VGA_BUF);
-						uint8_t* stepende = (uint8_t*)((int)PIXEL_STEP_LIST + ABG_XRes);
-						for (uint8_t* steplist=PIXEL_STEP_LIST;steplist<stepende;steplist++)
-						{
-							*vgapos = colors[(*bufpos)>>1 & 3];
-							vgapos++;
-							bufpos+=*steplist;
-						}
+						*vgapos = colors[(*bufpos)>>1 & 3];
+						vgapos++;
+						bufpos+=*steplist;
 					}
 				}
 			}

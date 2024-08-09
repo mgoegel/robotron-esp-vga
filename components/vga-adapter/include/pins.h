@@ -22,6 +22,9 @@
 #define PIN_NUM_TAST_DOWN 40
 #define PIN_NUM_TAST_RIGHT 41
 
+#define PIN_NUM_LED_SYNC 42
+#define PIN_NUM_LED_WIFI 46
+
 #ifdef DEBUG
 #define PIN_NUM_DEBUG_SPI 13//nur für debug
 #define PIN_NUM_DEBUG_COPY 14//nur für debug
