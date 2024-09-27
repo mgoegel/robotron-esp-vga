@@ -2,13 +2,13 @@
 
 #include "main.h"
 
-// Pin-Definition --> muss gegebenenfalls auf die Schaltung angepasst wereden!
-#define PIN_NUM_VGA_R0 4
-#define PIN_NUM_VGA_R1 5
+// Pin-Definition
+#define PIN_NUM_VGA_R0 16
+#define PIN_NUM_VGA_R1 15
 #define PIN_NUM_VGA_G0 6
 #define PIN_NUM_VGA_G1 7
-#define PIN_NUM_VGA_B0 15
-#define PIN_NUM_VGA_B1 16
+#define PIN_NUM_VGA_B0 4
+#define PIN_NUM_VGA_B1 5
 #define PIN_NUM_VGA_VSYNC 17
 #define PIN_NUM_VGA_HSYNC 18
 
@@ -22,8 +22,8 @@
 #define PIN_NUM_TAST_DOWN 40
 #define PIN_NUM_TAST_RIGHT 41
 
-#define PIN_NUM_LED_SYNC 42
-#define PIN_NUM_LED_WIFI 46
+#define PIN_NUM_LED_SYNC 46
+#define PIN_NUM_LED_WIFI 42
 
 #ifdef DEBUG
 #define PIN_NUM_DEBUG_SPI 13//nur für debug

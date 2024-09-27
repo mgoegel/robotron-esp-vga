@@ -188,9 +188,10 @@ void IRAM_ATTR capture_task(void*)
 
 			if (a==0)						 // Die Wartezeit ist abgelaufen!
 			{
+				uint8_t nullcolor = (Current_Color_Scheme == _COLORSCHEME_COUNT) ? Custom_Colors[0] : _STATIC_COLOR_VALS[Current_Color_Scheme].colors[0];
 				for (int b=0;b<ABG_XRes*ABG_YRes;b++)  // VGA-Puffer leeren
 				{
-					VGA_BUF[b]=0;
+					VGA_BUF[b]=nullcolor;
 				}
 				a=1000000;
 				ABG_RUN = false;
@@ -254,13 +255,6 @@ void IRAM_ATTR capture_task(void*)
 				}
 			}
 
-			// _STATIC_SYS_VALS liegt jetzt im externen Flash-Rom - für die Kopierschleife etwas zu langsam
-			uint8_t colors[4];
-			for (int i=0;i<4;i++)
-			{
-				colors[i] = _STATIC_SYS_VALS[ACTIVESYS].colors[i];
-			}
-
 			// und nun die Pixel in den VGA-Puffer kopieren
 			if (sync>0)
 			{
@@ -273,11 +267,11 @@ void IRAM_ATTR capture_task(void*)
 					{
 						if (bufpos & 1)
 						{
-							*vgapos = colors[((*((bufpos>>1)+buf))>>1) & 3];
+							*vgapos = Current_Colors[((*((bufpos>>1)+buf))>>1) & 3];
 						}
 						else
 						{
-							*vgapos = colors[((*((bufpos>>1)+buf))>>5) & 3];
+							*vgapos = Current_Colors[((*((bufpos>>1)+buf))>>5) & 3];
 						}
 						vgapos++;
 						bufpos+=*steplist;
@@ -290,7 +284,7 @@ void IRAM_ATTR capture_task(void*)
 					uint8_t* stepende = (uint8_t*)((int)PIXEL_STEP_LIST + ABG_XRes);
 					for (uint8_t* steplist=PIXEL_STEP_LIST;steplist<stepende;steplist++)
 					{
-						*vgapos = colors[(*bufpos)>>1 & 3];
+						*vgapos = Current_Colors[(*bufpos)>>1 & 3];
 						vgapos++;
 						bufpos+=*steplist;
 					}
