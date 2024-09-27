@@ -20,12 +20,12 @@ void setup_vga()
         .hsync_gpio_num = PIN_NUM_VGA_HSYNC,
         .data_gpio_nums =
         {
-        	PIN_NUM_VGA_R0,
-			PIN_NUM_VGA_R1,
-			PIN_NUM_VGA_G0,
-			PIN_NUM_VGA_G1,
 			PIN_NUM_VGA_B0,
 			PIN_NUM_VGA_B1,
+			PIN_NUM_VGA_G0,
+			PIN_NUM_VGA_G1,
+        	PIN_NUM_VGA_R0,
+			PIN_NUM_VGA_R1,
         },
         .timings =
         {

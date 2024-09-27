@@ -8,7 +8,7 @@
 const struct SYSSTATIC _STATIC_SYS_VALS[] = {
 	{ 
 		.name = "A7100 ",
-		.colors = {0, 0b00000100, 0b00001000, 0b00001100}, // 0b--rrggbb
+		.swap_colors = 0,
 		.bits_per_sample = 8,
 		.xres = 640,
 		.yres = 400,
@@ -19,7 +19,7 @@ const struct SYSSTATIC _STATIC_SYS_VALS[] = {
 	},
 	{ 
 		.name = "PC1715",
-		.colors = {0b00001000, 0b00000100, 0, 0b00001100}, // 0b--rrggbb
+		.swap_colors = 1,
 		.bits_per_sample = 4,
 		.xres = 640,
 		.yres = 299, /* 24 Zeilen (288 + Statuszeile) 299 im echten Leben*/
@@ -30,7 +30,7 @@ const struct SYSSTATIC _STATIC_SYS_VALS[] = {
 	},
 	{ 
 		.name = "EC1834",
-		.colors = {0, 0b00000100, 0b00001000, 0b00001100}, // 0b--rrggbb
+		.swap_colors = 0,
 		.bits_per_sample = 8,
 		.xres = 720,
 		.yres = 350,
@@ -38,6 +38,24 @@ const struct SYSSTATIC _STATIC_SYS_VALS[] = {
 		.default_pixel_abstand = 10717,
 		.default_start_line = 18,
 		.default_pixel_per_line = 86400,
+	}
+};
+
+const struct COLORSTATIC _STATIC_COLOR_VALS[] = {
+	{
+		.shortname = "GN",
+		.longname = "Gr\x84n",
+		.colors = {0, 0b00000100, 0b00001000, 0b00001100}, // 0b--rrggbb
+	},
+	{
+		.shortname = "WS",
+		.longname = "Weiss",
+		.colors = {0, 0b00010101, 0b00101010, 0b00111111}, // 0b--rrggbb
+	},
+	{
+		.shortname = "OR",
+		.longname = "Orange",
+		.colors = {0, 0b00010000, 0b00100100, 0b00111000}, // 0b--rrggbb
 	}
 };
 
@@ -65,4 +83,8 @@ volatile uint32_t bsyn_clock_diff = 0;
 volatile uint32_t bsyn_clock_last = 0;
 volatile uint32_t bsyn_clock_frame = 0;
 volatile uint32_t BSYNC_SAMPLE_ABSTAND = 0;
+int8_t Current_Color_Scheme = 0;
+uint8_t Current_Colors[4];
+uint8_t Custom_Colors[4];
+
 

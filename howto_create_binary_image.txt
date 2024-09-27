@@ -1,0 +1,15 @@
+Wifi-Projekt:
+1. Clean, Build
+2. Terminal
+3. "cd build"
+4. "python -m esptool --chip esp32s3 merge_bin --o robotron-esp32-wifi-firmware-V1.0.bin 0x0 bootloader/bootloader.bin 0x10000 vga-adapter.bin 0x8000 partition_table/partition-table.bin 0xd000 ota_data_initial.bin"
+5. die "build/robotron-esp32-wifi-firmware-Vx.x.bin" flashen, testen, veröffendlichen
+
+VGA-Projekt:
+6. Clean, Build
+7. die "build/vga-adapter.bin" aus dem Wifi-Projekt in "build/wifi-adapter.bin" umbenennen und in den Build-Ordner vom VGA-Projekt kopieren.
+8. Terminal:
+9. "cd build"
+10. "python -m esptool --chip esp32s3 merge_bin --o robotron-esp32-vga-firmware-V1.0.bin 0x0 bootloader/bootloader.bin 0x10000 vga-adapter.bin 0x8000 partition_table/partition-table.bin 0xd000 ota_data_initial.bin"
+11. "python -m esptool --chip esp32s3 merge_bin --o robotron-esp32-vga-wifi-firmware-V1.0.bin 0x0 bootloader/bootloader.bin 0x10000 vga-adapter.bin 0x8000 partition_table/partition-table.bin 0xd000 ota_data_initial.bin 0x110000 wifi-adapter.bin"
+12. die "build/robotron-esp32-vga-firmware-Vx.x.bin" und "build/robotron-esp32-vga-wifi-firmware-Vx.x.bin" flashen, testen, veröffendlichen

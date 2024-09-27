@@ -7,7 +7,7 @@
 // Statische Struktur - Systemkonstanten
 struct SYSSTATIC {
 	char* name;
-	uint8_t colors[4];
+	uint8_t swap_colors;
 	uint8_t bits_per_sample; // 4 oder 8
 	uint16_t xres; // 640 oder 720
 	uint16_t yres;
@@ -17,8 +17,16 @@ struct SYSSTATIC {
 	uint32_t default_pixel_per_line;
 };
 
+// Statische Struktur - Farben
+struct COLORSTATIC {
+	char* shortname;
+	char* longname;
+	uint8_t colors[4];
+};
+
 // Statische Werte vorinitialisiert
 extern const struct SYSSTATIC _STATIC_SYS_VALS[];
+extern const struct COLORSTATIC _STATIC_COLOR_VALS[];
 
 // Bezeichner für NVS KEY - max 15 Zeichen!
 #define _NVS_SETTING_MODE	"SMODE"
@@ -26,8 +34,11 @@ extern const struct SYSSTATIC _STATIC_SYS_VALS[];
 #define _NVS_SETTING_START_LINE	"SSTARTLINE(%d)"
 #define _NVS_SETTING_PIXEL_PER_LINE "SPIXPERLINE(%d)"
 #define _NVS_SETTING_WPS_MODE	"WPSMODE"
+#define _NVS_SETTING_COLORSCHEMA	"COLORSCHEMA"
+#define _NVS_SETTING_CUSTOMCOLORS	"CUSTOMCOLORS"
 
 #define _SETTINGS_COUNT 3 // Anzahl unterstützter Computer = 3 (A7100,PC1715,EC1835)
+#define _COLORSCHEME_COUNT 3 // Anzahl unterstützter Farbschema (+custom)
 
 // globale Variablen
 
@@ -55,3 +66,6 @@ extern volatile uint32_t bsyn_clock_diff;
 extern volatile uint32_t bsyn_clock_last;
 extern volatile uint32_t bsyn_clock_frame;
 extern volatile uint32_t BSYNC_SAMPLE_ABSTAND;
+extern int8_t Current_Color_Scheme;
+extern uint8_t Current_Colors[4];
+extern uint8_t Custom_Colors[4];
