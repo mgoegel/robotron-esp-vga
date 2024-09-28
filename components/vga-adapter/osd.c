@@ -626,6 +626,7 @@ void osd_task(void*)
 					break;
 				case 5:
 					Current_Color_Scheme++;
+					set_colorscheme();
 					if (Current_Color_Scheme>=_COLORSCHEME_COUNT) Current_Color_Scheme = 0;
 					nvs_saved = false;
 					i = 80;
