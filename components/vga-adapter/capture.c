@@ -255,6 +255,11 @@ void IRAM_ATTR capture_task(void*)
 				}
 			}
 
+			if (sync<BSYNC_SAMPLE_ABSTAND)
+			{
+				sync = BSYNC_SAMPLE_ABSTAND;
+			}
+
 			// und nun die Pixel in den VGA-Puffer kopieren
 			if (sync>0)
 			{
