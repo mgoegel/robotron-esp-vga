@@ -626,8 +626,8 @@ void osd_task(void*)
 					break;
 				case 5:
 					Current_Color_Scheme++;
-					set_colorscheme();
 					if (Current_Color_Scheme>=_COLORSCHEME_COUNT) Current_Color_Scheme = 0;
+					set_colorscheme();
 					nvs_saved = false;
 					i = 80;
 					while (gpio_get_level(PIN_NUM_TAST_UP)==0)

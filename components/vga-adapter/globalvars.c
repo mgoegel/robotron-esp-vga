@@ -38,7 +38,18 @@ const struct SYSSTATIC _STATIC_SYS_VALS[] = {
 		.default_pixel_abstand = 10717,
 		.default_start_line = 18,
 		.default_pixel_per_line = 86400,
-	}
+	},
+	{ 
+		.name = "K7024",
+		.swap_colors = 0,
+		.bits_per_sample = 4,
+		.xres = 640,
+		.yres = 300,
+		.interleave_mask = 0,
+		.default_pixel_abstand = 15996,
+		.default_start_line = 24,
+		.default_pixel_per_line = 87200,
+	},
 };
 
 const struct COLORSTATIC _STATIC_COLOR_VALS[] = {
