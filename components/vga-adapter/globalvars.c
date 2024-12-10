@@ -8,7 +8,7 @@
 const struct SYSSTATIC _STATIC_SYS_VALS[] = {
 	{ 
 		.name = "A7100 ",
-		.swap_colors = 0,
+		.swap_colors = {0,1,2,3},
 		.bits_per_sample = 8,
 		.xres = 640,
 		.yres = 400,
@@ -19,7 +19,7 @@ const struct SYSSTATIC _STATIC_SYS_VALS[] = {
 	},
 	{ 
 		.name = "PC1715",
-		.swap_colors = 1,
+		.swap_colors = {2,1,0,3},
 		.bits_per_sample = 4,
 		.xres = 640,
 		.yres = 299, /* 24 Zeilen (288 + Statuszeile) 299 im echten Leben*/
@@ -30,7 +30,7 @@ const struct SYSSTATIC _STATIC_SYS_VALS[] = {
 	},
 	{ 
 		.name = "EC1834",
-		.swap_colors = 0,
+		.swap_colors = {0,1,2,3},
 		.bits_per_sample = 8,
 		.xres = 720,
 		.yres = 350,
@@ -41,7 +41,7 @@ const struct SYSSTATIC _STATIC_SYS_VALS[] = {
 	},
 	{ 
 		.name = "K7024",
-		.swap_colors = 0,
+		.swap_colors = {0,2,0,3},
 		.bits_per_sample = 4,
 		.xres = 640,
 		.yres = 300,
@@ -49,6 +49,17 @@ const struct SYSSTATIC _STATIC_SYS_VALS[] = {
 		.default_pixel_abstand = 15996,
 		.default_start_line = 24,
 		.default_pixel_per_line = 87200,
+	},
+	{ 
+		.name = "VIDEO3",
+		.swap_colors = {0,0,0,3},
+		.bits_per_sample = 4,
+		.xres = 640,
+		.yres = 300,
+		.interleave_mask = 0,
+		.default_pixel_abstand = 20640,
+		.default_start_line = 51,
+		.default_pixel_per_line = 89580,
 	},
 };
 

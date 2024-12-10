@@ -7,7 +7,7 @@
 // Statische Struktur - Systemkonstanten
 struct SYSSTATIC {
 	char* name;
-	uint8_t swap_colors;
+	uint8_t swap_colors[4];
 	uint8_t bits_per_sample; // 4 oder 8
 	uint16_t xres; // 640 oder 720
 	uint16_t yres;
@@ -37,7 +37,7 @@ extern const struct COLORSTATIC _STATIC_COLOR_VALS[];
 #define _NVS_SETTING_COLORSCHEMA	"COLORSCHEMA"
 #define _NVS_SETTING_CUSTOMCOLORS	"CUSTOMCOLORS"
 
-#define _SETTINGS_COUNT 4 // Anzahl unterstützter Computer (A7100,PC1715,EC1835,K7024)
+#define _SETTINGS_COUNT 5 // Anzahl unterstützter Computer (A7100,PC1715,EC1835,K7024,VIDEO3)
 #define _COLORSCHEME_COUNT 3 // Anzahl unterstützter Farbschema (+custom)
 
 // globale Variablen

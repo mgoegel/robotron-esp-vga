@@ -178,38 +178,18 @@ static void drawhint(char* txt, int count, int pos, int fill)
 // Farbschema je nach Computer-Typ in Variable kopieren
 static void set_colorscheme()
 {
-	if (_STATIC_SYS_VALS[ACTIVESYS].swap_colors == 1)	// verdrehtes Farbschema beim PC1715
+	if (Current_Color_Scheme == _COLORSCHEME_COUNT)
 	{
-		if (Current_Color_Scheme == _COLORSCHEME_COUNT)
+		for (int i=0;i<4;i++)
 		{
-			Current_Colors[0] = Custom_Colors[2];
-			Current_Colors[1] = Custom_Colors[1];
-			Current_Colors[2] = Custom_Colors[0];
-			Current_Colors[3] = Custom_Colors[3];
-		}
-		else
-		{
-				Current_Colors[0] = _STATIC_COLOR_VALS[Current_Color_Scheme].colors[2];
-				Current_Colors[1] = _STATIC_COLOR_VALS[Current_Color_Scheme].colors[1];
-				Current_Colors[2] = _STATIC_COLOR_VALS[Current_Color_Scheme].colors[0];
-				Current_Colors[3] = _STATIC_COLOR_VALS[Current_Color_Scheme].colors[3];
+			Current_Colors[i] = Custom_Colors[i];
 		}
 	}
-	else	// 1:1 Farbschema
+	else
 	{
-		if (Current_Color_Scheme == _COLORSCHEME_COUNT)
+		for (int i=0;i<4;i++)
 		{
-			for (int i=0;i<4;i++)
-			{
-				Current_Colors[i] = Custom_Colors[i];
-			}
-		}
-		else
-		{
-			for (int i=0;i<4;i++)
-			{
-				Current_Colors[i] = _STATIC_COLOR_VALS[Current_Color_Scheme].colors[i];
-			}
+			Current_Colors[i] = _STATIC_COLOR_VALS[Current_Color_Scheme].colors[_STATIC_SYS_VALS[ACTIVESYS].swap_colors[i]];
 		}
 	}
 }
