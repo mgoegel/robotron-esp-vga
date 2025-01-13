@@ -37,7 +37,7 @@ extern const struct COLORSTATIC _STATIC_COLOR_VALS[];
 #define _NVS_SETTING_COLORSCHEMA	"COLORSCHEMA"
 #define _NVS_SETTING_CUSTOMCOLORS	"CUSTOMCOLORS"
 
-#define _SETTINGS_COUNT 5 // Anzahl unterstützter Computer (A7100,PC1715,EC1835,K7024,VIDEO3)
+#define _SETTINGS_COUNT 6 // Anzahl unterstützter Computer (A7100,PC1715,EC1835,K7024,VIDEO3,VIS2A)
 #define _COLORSCHEME_COUNT 3 // Anzahl unterstützter Farbschema (+custom)
 
 // globale Variablen

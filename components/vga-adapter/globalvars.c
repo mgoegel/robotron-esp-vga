@@ -61,6 +61,17 @@ const struct SYSSTATIC _STATIC_SYS_VALS[] = {
 		.default_start_line = 51,
 		.default_pixel_per_line = 89580,
 	},
+	{
+        .name = "VIS2A ",
+        .swap_colors = {2,1,0,3},
+        .bits_per_sample = 4,
+        .xres = 512,
+        .yres = 256,
+		.interleave_mask = 0,
+        .default_pixel_abstand = 19186,
+        .default_start_line = 35,
+        .default_pixel_per_line = 80000,
+    },    	
 };
 
 const struct COLORSTATIC _STATIC_COLOR_VALS[] = {

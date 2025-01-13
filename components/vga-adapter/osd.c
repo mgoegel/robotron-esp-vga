@@ -136,6 +136,7 @@ static void drawtext(char* txt, int count, int pos, int fill, bool selected)
 	{
 		for (int b=0;b<6;b++)
 		{
+			if (b+(pos+a)*7 >= ABG_XRes) return;
 			char c=0;
 			if (a<count)
 			{
@@ -162,6 +163,7 @@ static void drawhint(char* txt, int count, int pos, int fill)
 	{
 		for (int b=0;b<6;b++)
 		{
+			if (b+(pos+a)*7 >= ABG_XRes) return;
 			char c=0;
 			if (a<count)
 			{
