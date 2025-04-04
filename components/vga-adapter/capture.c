@@ -189,10 +189,9 @@ void IRAM_ATTR capture_task(void*)
 			if (a==0)						 // Die Wartezeit ist abgelaufen!
 			{
 				uint8_t nullcolor = (Current_Color_Scheme == _COLORSCHEME_COUNT) ? Custom_Colors[0] : _STATIC_COLOR_VALS[Current_Color_Scheme].colors[0];
-				for (int b=0;b<ABG_XRes*ABG_YRes;b++)  // VGA-Puffer leeren
-				{
-					VGA_BUF[b]=nullcolor;
-				}
+				for (int b=0;b<ABG_YRes;b++)  // VGA-Puffer leeren
+					for (int c=0;c<ABG_XRes;c++)
+						VGA_BUF[b][c]=nullcolor;
 				a=1000000;
 				ABG_RUN = false;
 				ABG_DMALIST[0] = 0xc0000000;
@@ -266,7 +265,7 @@ void IRAM_ATTR capture_task(void*)
 				if (ABG_Bits_per_sample == 4)
 				{
 					uint32_t bufpos = sync - BSYNC_SAMPLE_ABSTAND;
-					uint8_t* vgapos = (uint8_t*)((line - ABG_START_LINE)*ABG_XRes + (int)VGA_BUF);
+					uint8_t* vgapos = VGA_BUF[line - ABG_START_LINE];
 					uint8_t* stepende = (uint8_t*)((int)PIXEL_STEP_LIST + ABG_XRes);
 					for (uint8_t* steplist=PIXEL_STEP_LIST;steplist<stepende;steplist++)
 					{
@@ -285,7 +284,7 @@ void IRAM_ATTR capture_task(void*)
 				else // 8 bit samples
 				{
 					uint8_t* bufpos = (uint8_t*)((sync - BSYNC_SAMPLE_ABSTAND) + (int)buf);
-					uint8_t* vgapos = (uint8_t*)((line - ABG_START_LINE)*ABG_XRes + (int)VGA_BUF);
+					uint8_t* vgapos = VGA_BUF[line - ABG_START_LINE];
 					uint8_t* stepende = (uint8_t*)((int)PIXEL_STEP_LIST + ABG_XRes);
 					for (uint8_t* steplist=PIXEL_STEP_LIST;steplist<stepende;steplist++)
 					{

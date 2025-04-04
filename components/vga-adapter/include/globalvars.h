@@ -15,6 +15,8 @@ struct SYSSTATIC {
 	uint32_t default_pixel_abstand;
 	uint32_t default_start_line;
 	uint32_t default_pixel_per_line;
+	uint8_t default_vga_mode;
+	uint32_t accept_vga_modes;
 };
 
 // Statische Struktur - Farben
@@ -24,9 +26,27 @@ struct COLORSTATIC {
 	uint8_t colors[4];
 };
 
+// Statische Struktur - VGA-Modus
+struct VGASTATIC {
+	char* shortname;
+	char* longname;
+	uint16_t hFront;
+	uint16_t hSync;
+	uint16_t hBack;
+	uint16_t hRes;
+	uint16_t vFront;
+	uint16_t vSync;
+	uint16_t vBack;
+	uint16_t vRes;
+	uint32_t frequency;
+	uint16_t vPol;
+	uint16_t hPol;
+};
+
 // Statische Werte vorinitialisiert
 extern const struct SYSSTATIC _STATIC_SYS_VALS[];
 extern const struct COLORSTATIC _STATIC_COLOR_VALS[];
+extern const struct VGASTATIC _STATIC_VGA_VALS[];
 
 // Bezeichner für NVS KEY - max 15 Zeichen!
 #define _NVS_SETTING_MODE	"SMODE"
@@ -36,14 +56,17 @@ extern const struct COLORSTATIC _STATIC_COLOR_VALS[];
 #define _NVS_SETTING_WPS_MODE	"WPSMODE"
 #define _NVS_SETTING_COLORSCHEMA	"COLORSCHEMA"
 #define _NVS_SETTING_CUSTOMCOLORS	"CUSTOMCOLORS"
+#define _NVS_SETTING_VGAMODE	"VGAMODE(%d)"
 
 #define _SETTINGS_COUNT 6 // Anzahl unterstützter Computer (A7100,PC1715,EC1835,K7024,VIDEO3,VIS2A)
 #define _COLORSCHEME_COUNT 3 // Anzahl unterstützter Farbschema (+custom)
+#define _VGAMODE_COUNT 4 // Anzahl VGA-Modes (640x400x70, 640x480x60, 800x600x56, 800x600x60)
 
 // globale Variablen
 
 // Aktives System
 extern uint16_t ACTIVESYS;
+extern uint8_t ACTIVEVGA;
 
 extern nvs_handle_t sys_nvs_handle;
 
@@ -58,10 +81,11 @@ extern uint32_t ABG_Interleave;
 extern uint16_t ABG_XRes;
 extern uint16_t ABG_YRes;
 extern uint8_t ABG_Bits_per_sample;
+extern uint8_t OSD_Height;
 
 extern uint8_t* PIXEL_STEP_LIST;
-extern uint8_t* VGA_BUF;
-extern uint8_t* OSD_BUF;
+extern uint8_t** VGA_BUF;
+extern uint8_t** OSD_BUF;
 extern volatile uint32_t bsyn_clock_diff;
 extern volatile uint32_t bsyn_clock_last;
 extern volatile uint32_t bsyn_clock_frame;
