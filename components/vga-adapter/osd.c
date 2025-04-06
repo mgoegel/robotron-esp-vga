@@ -301,7 +301,8 @@ bool restore_settings() {
 		printf("Modus-Einstellung ungültig (%d), nutze default = A7100\n",nvs_mode);
 		nvs_mode = 0;
 	}
-	if (nvs_get_i16(sys_nvs_handle, _NVS_SETTING_VGAMODE, &nvs_vga) != ESP_OK) {
+	snprintf(tb, 40, _NVS_SETTING_VGAMODE, nvs_mode);
+	if (nvs_get_i16(sys_nvs_handle, tb, &nvs_vga) != ESP_OK) {
 		printf("VGA-Einstellung nicht gefunden, nutze default = %d\n",_STATIC_SYS_VALS[nvs_mode].default_vga_mode);
 		nvs_vga = _STATIC_SYS_VALS[nvs_mode].default_vga_mode;
 	}
@@ -601,8 +602,14 @@ void osd_task(void*)
 		if (gpio_get_level(PIN_NUM_TAST_RIGHT)==0)
 		{
 			cursor++;
-			if (cursor==8) {
+			if (cursor==8) 
+			{
+				uint8_t oldvga = ACTIVEVGA;
 				nvs_saved = restore_settings();
+				if (ACTIVEVGA != oldvga)
+				{
+					setup_vga_mode();
+				}
 				cursor = 1;
 			}
 		}
@@ -798,7 +805,13 @@ void osd_task(void*)
 					BSYNC_PIXEL_ABSTAND = (float)_STATIC_SYS_VALS[ACTIVESYS].default_pixel_abstand / 100;
 					ABG_START_LINE = _STATIC_SYS_VALS[ACTIVESYS].default_start_line;
 					ABG_PIXEL_PER_LINE = (float)_STATIC_SYS_VALS[ACTIVESYS].default_pixel_per_line / 100;
+					if (ACTIVEVGA != _STATIC_SYS_VALS[ACTIVESYS].default_vga_mode)
+					{
+						ACTIVEVGA = _STATIC_SYS_VALS[ACTIVESYS].default_vga_mode;
+						setup_vga_mode();
+					}
 					cursor=1;
+					nvs_saved = false;
 					break;
 			}
 		}
