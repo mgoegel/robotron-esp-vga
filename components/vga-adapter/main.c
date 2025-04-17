@@ -20,7 +20,8 @@ void IRAM_ATTR app_main(void)
 	// NVS Einstellungen laden, wenn vorhanden
 	restore_settings();
 
-	setup_vga();
+	setup_vga_buffer();
+	setup_vga_mode();
 	xTaskCreatePinnedToCore(osd_task,"osd_task",6000,NULL,0,NULL,0);
 	xTaskCreatePinnedToCore(capture_task,"capture_task",6000,NULL,10,NULL,1);
 }

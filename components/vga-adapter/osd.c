@@ -11,6 +11,7 @@
 #include "main.h"
 #include "pins.h"
 #include "osd.h"
+#include "vga.h"
 
 char last_app_name[17];
 uint8_t last_app_id;
@@ -136,6 +137,7 @@ static void drawtext(char* txt, int count, int pos, int fill, bool selected)
 	{
 		for (int b=0;b<6;b++)
 		{
+			if (b+(pos+a)*7 >= ABG_XRes) return;
 			char c=0;
 			if (a<count)
 			{
@@ -143,14 +145,14 @@ static void drawtext(char* txt, int count, int pos, int fill, bool selected)
 			}
 			for (int d=0;d<7;d++)
 			{
-				OSD_BUF[b+(pos+a)*7+(d+1)*ABG_XRes+1] = (((1 << d) & c) != 0) ? color : bkcolor;
+				OSD_BUF[d+1][b+(pos+a)*7+1] = (((1 << d) & c) != 0) ? color : bkcolor;
 			}
-			OSD_BUF[(pos+a)*7+b+1] = bkcolor;
-			OSD_BUF[(pos+a)*7+b+8*ABG_XRes+1] = bkcolor;
+			OSD_BUF[0][(pos+a)*7+b+1] = bkcolor;
+			OSD_BUF[8][(pos+a)*7+b+1] = bkcolor;
 		}
 		for (int d=0;d<9;d++)
 		{
-			OSD_BUF[(pos+a)*7+d*ABG_XRes] = bkcolor;
+			OSD_BUF[d][(pos+a)*7] = bkcolor;
 		}
 	}
 }
@@ -162,6 +164,7 @@ static void drawhint(char* txt, int count, int pos, int fill)
 	{
 		for (int b=0;b<6;b++)
 		{
+			if (b+(pos+a)*7 >= ABG_XRes) return;
 			char c=0;
 			if (a<count)
 			{
@@ -169,7 +172,7 @@ static void drawhint(char* txt, int count, int pos, int fill)
 			}
 			for (int d=0;d<7;d++)
 			{
-				OSD_BUF[b+(pos+a)*7+(d+11)*ABG_XRes] = (((1 << d) & c) != 0) ? 0x1a : 0x00;
+				OSD_BUF[d+11][b+(pos+a)*7] = (((1 << d) & c) != 0) ? 0x1a : 0x00;
 			}
 		}
 	}
@@ -178,38 +181,18 @@ static void drawhint(char* txt, int count, int pos, int fill)
 // Farbschema je nach Computer-Typ in Variable kopieren
 static void set_colorscheme()
 {
-	if (_STATIC_SYS_VALS[ACTIVESYS].swap_colors == 1)	// verdrehtes Farbschema beim PC1715
+	if (Current_Color_Scheme == _COLORSCHEME_COUNT)
 	{
-		if (Current_Color_Scheme == _COLORSCHEME_COUNT)
+		for (int i=0;i<4;i++)
 		{
-			Current_Colors[0] = Custom_Colors[2];
-			Current_Colors[1] = Custom_Colors[1];
-			Current_Colors[2] = Custom_Colors[0];
-			Current_Colors[3] = Custom_Colors[3];
-		}
-		else
-		{
-				Current_Colors[0] = _STATIC_COLOR_VALS[Current_Color_Scheme].colors[2];
-				Current_Colors[1] = _STATIC_COLOR_VALS[Current_Color_Scheme].colors[1];
-				Current_Colors[2] = _STATIC_COLOR_VALS[Current_Color_Scheme].colors[0];
-				Current_Colors[3] = _STATIC_COLOR_VALS[Current_Color_Scheme].colors[3];
+			Current_Colors[i] = Custom_Colors[i];
 		}
 	}
-	else	// 1:1 Farbschema
+	else
 	{
-		if (Current_Color_Scheme == _COLORSCHEME_COUNT)
+		for (int i=0;i<4;i++)
 		{
-			for (int i=0;i<4;i++)
-			{
-				Current_Colors[i] = Custom_Colors[i];
-			}
-		}
-		else
-		{
-			for (int i=0;i<4;i++)
-			{
-				Current_Colors[i] = _STATIC_COLOR_VALS[Current_Color_Scheme].colors[i];
-			}
+			Current_Colors[i] = _STATIC_COLOR_VALS[Current_Color_Scheme].colors[_STATIC_SYS_VALS[ACTIVESYS].swap_colors[i]];
 		}
 	}
 }
@@ -303,6 +286,7 @@ bool restore_settings() {
 	printf("Lese Einstellungen vom Flash ...\n");
 
 	int16_t nvs_mode = -1;
+	int16_t nvs_vga = -1;
 	uint32_t nvs_pixel_abstand = 0;
 	uint32_t nvs_start_line = 0;
 	uint32_t nvs_pixel_per_line = 0;
@@ -317,7 +301,15 @@ bool restore_settings() {
 		printf("Modus-Einstellung ungültig (%d), nutze default = A7100\n",nvs_mode);
 		nvs_mode = 0;
 	}
-
+	snprintf(tb, 40, _NVS_SETTING_VGAMODE, nvs_mode);
+	if (nvs_get_i16(sys_nvs_handle, tb, &nvs_vga) != ESP_OK) {
+		printf("VGA-Einstellung nicht gefunden, nutze default = %d\n",_STATIC_SYS_VALS[nvs_mode].default_vga_mode);
+		nvs_vga = _STATIC_SYS_VALS[nvs_mode].default_vga_mode;
+	}
+	if (nvs_vga<0 || nvs_vga>=_VGAMODE_COUNT) {
+		printf("VGA-Einstellung ungültig (%d), nutze default = %d\n",nvs_vga,_STATIC_SYS_VALS[nvs_mode].default_vga_mode);
+		nvs_vga = _STATIC_SYS_VALS[nvs_mode].default_vga_mode;
+	}
 	snprintf(tb, 40, _NVS_SETTING_PIXEL_ABSTAND, nvs_mode);
 	if (nvs_get_u32(sys_nvs_handle, tb, &nvs_pixel_abstand) != ESP_OK) {
 		nvs_pixel_abstand = _STATIC_SYS_VALS[nvs_mode].default_pixel_abstand;
@@ -348,6 +340,7 @@ bool restore_settings() {
 	}
 
 	ACTIVESYS = nvs_mode;
+	ACTIVEVGA = nvs_vga;
 	set_colorscheme();
 	BSYNC_PIXEL_ABSTAND = (float)nvs_pixel_abstand / 100;
 	ABG_START_LINE = nvs_start_line;
@@ -372,6 +365,7 @@ bool write_settings(bool full) {
 	uint32_t nvs_pixel_per_line = (int)(ABG_PIXEL_PER_LINE * 100);
 	int8_t nvs_current_colorscheme = Current_Color_Scheme;
 	uint32_t* nvs_custom_colors = ((uint32_t*)&Custom_Colors[0]);
+	int16_t nvs_vga = ACTIVEVGA;
 	char tb[40];
 
 	esp_err_t err;
@@ -391,6 +385,9 @@ bool write_settings(bool full) {
 		err = nvs_set_i8(sys_nvs_handle, _NVS_SETTING_COLORSCHEMA, nvs_current_colorscheme);
 		if (err != ESP_OK) valid_settings = false;
 		err = nvs_set_u32(sys_nvs_handle, _NVS_SETTING_CUSTOMCOLORS, *nvs_custom_colors);
+		if (err != ESP_OK) valid_settings = false;
+		snprintf(tb, 40, _NVS_SETTING_VGAMODE, nvs_mode);
+		err = nvs_set_i16(sys_nvs_handle, tb, nvs_vga);
 		if (err != ESP_OK) valid_settings = false;
 	}
 
@@ -415,9 +412,11 @@ void osd_task(void*)
 	};
 	ESP_ERROR_CHECK(gpio_config(&pincfg));
 
-	char* tb = heap_caps_malloc(90, MALLOC_CAP_INTERNAL);
+	char* tb = heap_caps_malloc(100, MALLOC_CAP_INTERNAL);
 	int cursor = 1;
-	for (int h=0;h<20*ABG_XRes;h++) OSD_BUF[h]=0x0;
+	for (int h=0;h<20;h++)
+		for (int i=0;i<ABG_XRes;i++) 
+			OSD_BUF[h][i]=0x0;
 
 	int j = 0;
 	bool nvs_saved = false;
@@ -429,23 +428,25 @@ void osd_task(void*)
 		drawtext(tb,l,0,15,cursor==0);
 		l = snprintf(tb, 40, _STATIC_SYS_VALS[ACTIVESYS].name);
 		drawtext(tb,l,16,7,cursor==1);
-		l = snprintf(tb, 40, "PZ=%.1f",ABG_PIXEL_PER_LINE);
-		drawtext(tb,l,24,9,cursor==2);
-		l = snprintf(tb, 40, "PA=%.2f",BSYNC_PIXEL_ABSTAND);
-		drawtext(tb,l,34,9,cursor==3);
-		l = snprintf(tb, 40, "St=%ld",ABG_START_LINE);
-		drawtext(tb,l,44,6,cursor==4);
+		l = snprintf(tb, 40, "Z=%.1f",ABG_PIXEL_PER_LINE);
+		drawtext(tb,l,24,8,cursor==2);
+		l = snprintf(tb, 40, "A=%.2f",BSYNC_PIXEL_ABSTAND);
+		drawtext(tb,l,33,8,cursor==3);
+		l = snprintf(tb, 40, "S=%ld",ABG_START_LINE);
+		drawtext(tb,l,42,5,cursor==4);
 		if (Current_Color_Scheme == _COLORSCHEME_COUNT)
 		{
-			l = snprintf(tb, 40, "FS=**");
+			l = snprintf(tb, 40, "F=**");
 		}
 		else
 		{
-			l = snprintf(tb, 40, "FS=%s", _STATIC_COLOR_VALS[Current_Color_Scheme].shortname);
+			l = snprintf(tb, 40, "F=%s", _STATIC_COLOR_VALS[Current_Color_Scheme].shortname);
 		}
-		drawtext(tb,l,51,5,cursor==5);
+		drawtext(tb,l,48,4,cursor==5);
+		l = snprintf(tb, 40, "V=%d",ACTIVEVGA);
+		drawtext(tb,l,53,3,cursor==6);
 		l = snprintf(tb, 40, "Speicher");
-		drawtext(tb,l,57,8,cursor==6);
+		drawtext(tb,l,57,8,cursor==7);
 
 		// Frequenzen Ausgeben
 		if (bsyn_clock_diff>0 && bsyn_clock_frame>0)
@@ -471,7 +472,7 @@ void osd_task(void*)
 			case 0:
 				if (this_app_id != next_app_id)
 				{
-					l = snprintf(tb, 90, "Betriebsart \x7endern  \x80=%s  \x81=%s  \x82=Computer-Typ %s",next_app_name,last_app_name, (wps_app_id==0) ? "" : " \x83(5s)=WPS Setup");
+					l = snprintf(tb, 100, "Betriebsart \x7endern  \x80=%s  \x81=%s  \x82=Computer-Typ %s",next_app_name,last_app_name, (wps_app_id==0) ? "" : " \x83(5s)=WPS Setup");
 				}
 				else
 				{
@@ -495,10 +496,28 @@ void osd_task(void*)
 			case 5:
 				int colplus = (Current_Color_Scheme<(_COLORSCHEME_COUNT-1)) ? Current_Color_Scheme+1 : 0;
 				int colminus = (Current_Color_Scheme==0) ? _COLORSCHEME_COUNT-1 : Current_Color_Scheme-1;
-				l = snprintf(tb, 90, "Farbschema \x7endern  \x80=%s  \x80(3s)=Manuelle Farben  \x81=%s  \x82=Speicher  \x83=St", _STATIC_COLOR_VALS[colplus].longname, _STATIC_COLOR_VALS[colminus].longname);
+				l = snprintf(tb, 90, "Farbschema \x7endern  \x80=%s  \x80(3s)=Manuelle Farben  \x81=%s  \x82=VGA-Modus  \x83=St", _STATIC_COLOR_VALS[colplus].longname, _STATIC_COLOR_VALS[colminus].longname);
 				break;
 			case 6:
-				l = snprintf(tb, 90, "Einstellungen  \x80=Speichern  \x81=Reset  \x82=Laden  \x83=Farbschema");
+				uint8_t u = ACTIVEVGA;
+				uint8_t d = ACTIVEVGA;
+				do
+				{
+					d--;
+					if (d>_VGAMODE_COUNT) d = _VGAMODE_COUNT;
+				}
+				while (((1 << d) & _STATIC_SYS_VALS[ACTIVESYS].accept_vga_modes) == 0);
+				do
+				{
+					u++;
+					if (u>=_VGAMODE_COUNT) u = 0;
+				}
+				while (((1 << u) & _STATIC_SYS_VALS[ACTIVESYS].accept_vga_modes) == 0);
+
+				l = snprintf(tb, 90, "VGA-Modus \x7endern  \x80=%s \x81=%s \x82=Speicher  \x83=Farbschema",_STATIC_VGA_VALS[u].longname,_STATIC_VGA_VALS[d].longname);
+				break;
+			case 7:
+				l = snprintf(tb, 90, "Einstellungen  \x80=Speichern  \x81=Reset  \x82=Laden  \x83=VGA-Modus");
 				break;
 		}
 		drawhint(tb,l,0,90);
@@ -527,7 +546,9 @@ void osd_task(void*)
 			{
 				if (cursor==1 && ABG_RUN)
 				{
-					for (int h=0;h<20*ABG_XRes;h++) OSD_BUF[h]=0x0;
+					for (int h=0;h<20;h++)
+						for (int i=0;i<ABG_XRes;i++) 
+							OSD_BUF[h][i]=0x0;
 				}
 				else
 				{
@@ -581,8 +602,14 @@ void osd_task(void*)
 		if (gpio_get_level(PIN_NUM_TAST_RIGHT)==0)
 		{
 			cursor++;
-			if (cursor==7) {
+			if (cursor==8) 
+			{
+				uint8_t oldvga = ACTIVEVGA;
 				nvs_saved = restore_settings();
+				if (ACTIVEVGA != oldvga)
+				{
+					setup_vga_mode();
+				}
 				cursor = 1;
 			}
 		}
@@ -626,8 +653,8 @@ void osd_task(void*)
 					break;
 				case 5:
 					Current_Color_Scheme++;
-					set_colorscheme();
 					if (Current_Color_Scheme>=_COLORSCHEME_COUNT) Current_Color_Scheme = 0;
+					set_colorscheme();
 					nvs_saved = false;
 					i = 80;
 					while (gpio_get_level(PIN_NUM_TAST_UP)==0)
@@ -637,8 +664,8 @@ void osd_task(void*)
 						{
 							Current_Color_Scheme = _COLORSCHEME_COUNT;
 							set_colorscheme();
-							l = snprintf(tb, 40, "FS=** 0=000 1=000 2=000 3=000");
-							drawtext(tb,l,51,40,false);
+							l = snprintf(tb, 40, "F=** 0=000 1=000 2=000 3=000");
+							drawtext(tb,l,48,40,false);
 							l = snprintf(tb, 90, "Manuelle Farben \x7endern \x80=+ \x81=- \x83\x82=R/G/B \x83\x82(3s)=zur\x84" "ck zu Farbschema");
 							drawhint(tb,l,0,90);
 							cursor = 0;
@@ -649,7 +676,7 @@ void osd_task(void*)
 									for (int j=0;j<3;j++)
 									{
 										char c = (Custom_Colors[k] >> ((2-j)*2) & 3) + '0';
-										drawtext(&c,1,59+j+k*6,1,cursor==(k*3+j));
+										drawtext(&c,1,55+j+k*6,1,cursor==(k*3+j));
 									}
 								}
 								i = 80;
@@ -698,10 +725,20 @@ void osd_task(void*)
 						}
 						i--;
 					}
-					l = snprintf(tb, 90, "  ");
-					drawtext(tb,l,65,2,false);
+					l = snprintf(tb, 90, " ");
+					drawtext(tb,l,52,20,false);
 					break;
 				case 6:
+					do
+					{
+						ACTIVEVGA++;
+						if (ACTIVEVGA>=_VGAMODE_COUNT) ACTIVEVGA = 0;
+					}
+					while (((1 << ACTIVEVGA) & _STATIC_SYS_VALS[ACTIVESYS].accept_vga_modes) == 0);
+					setup_vga_mode();
+					nvs_saved = false;
+					break;
+				case 7:
 					if (!nvs_saved) // Sicherung gegen unnötiges schreiben
 						nvs_saved = write_settings(true);
 					cursor=1;
@@ -754,11 +791,27 @@ void osd_task(void*)
 					nvs_saved = false;
 					break;
 				case 6:
+					do
+					{
+						ACTIVEVGA--;
+						if (ACTIVEVGA>_VGAMODE_COUNT) ACTIVEVGA = _VGAMODE_COUNT;
+					}
+					while (((1 << ACTIVEVGA) & _STATIC_SYS_VALS[ACTIVESYS].accept_vga_modes) == 0);
+					setup_vga_mode();
+					nvs_saved = false;
+					break;
+				case 7:
 					// default Einstellungen setzen
 					BSYNC_PIXEL_ABSTAND = (float)_STATIC_SYS_VALS[ACTIVESYS].default_pixel_abstand / 100;
 					ABG_START_LINE = _STATIC_SYS_VALS[ACTIVESYS].default_start_line;
 					ABG_PIXEL_PER_LINE = (float)_STATIC_SYS_VALS[ACTIVESYS].default_pixel_per_line / 100;
+					if (ACTIVEVGA != _STATIC_SYS_VALS[ACTIVESYS].default_vga_mode)
+					{
+						ACTIVEVGA = _STATIC_SYS_VALS[ACTIVESYS].default_vga_mode;
+						setup_vga_mode();
+					}
 					cursor=1;
+					nvs_saved = false;
 					break;
 			}
 		}
