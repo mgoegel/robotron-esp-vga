@@ -865,7 +865,7 @@ void osd_task(void*)
 							case 0: //Computer-Profil
 								if (osd_repeat)
 								{
-									nvs_set_i16(sys_nvs_handle, _NVS_SETTING_MODE, menu_subsel-1);
+									nvs_set_u16(sys_nvs_handle, _NVS_SETTING_MODE, menu_subsel-1);
 									esp_restart();
 								}
 								break;
