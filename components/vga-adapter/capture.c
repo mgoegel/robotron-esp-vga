@@ -9,6 +9,7 @@
 #include "esp_intr_alloc.h"
 #include <rom/ets_sys.h>
 #include <string.h>
+#include "esp_private/gdma.h"
 
 #include "driver/gpio_filter.h"
 
@@ -17,6 +18,25 @@
 #include "main.h"
 #include "pins.h"
 #include "osd.h"
+
+// einen bestimmten DMA-Kanal reservieren
+void alloc_abg_dma(uint8_t channel)
+{
+	gdma_channel_handle_t s_rx_channel;
+	gdma_channel_alloc_config_t rx_alloc_config = 
+	{
+		.direction = GDMA_CHANNEL_DIRECTION_RX,
+		.sibling_chan = NULL,
+	};
+	if (gdma_new_channel(&rx_alloc_config, &s_rx_channel) != ESP_OK) return;
+	int i=10;
+	gdma_get_channel_id(s_rx_channel, &i);
+	if (i != channel)
+	{
+		alloc_abg_dma(channel);
+		gdma_del_channel(s_rx_channel);
+	}
+}
 
 // alles für die Abtastung der Video-Signale vom ABG mit SPI vorbereiten
 void setup_abg()
@@ -76,8 +96,17 @@ void setup_abg()
 	ABG_DMALIST[6] = 0;
 	ABG_DMALIST[7] = 0;
 
-	// normalerweise nimmt der SPI-Kontroller bei diesem Projekt den DMA-Kanal 1. Sicher sein kann man sich da nicht - also überprüfen.
-	assert(REG_READ(GDMA_IN_PERI_SEL_CH1_REG) == 0);
+	// wir haben uns den DMA-Kanal 1 reserviert, nun weisen wir den Kanal wieder dem SPI-Kontroller zu
+	if (REG_READ(GDMA_IN_PERI_SEL_CH0_REG) == 0) REG_WRITE(GDMA_IN_PERI_SEL_CH0_REG, 63);
+	REG_WRITE(GDMA_IN_PERI_SEL_CH1_REG, 0);
+	if (REG_READ(GDMA_IN_PERI_SEL_CH2_REG) == 0) REG_WRITE(GDMA_IN_PERI_SEL_CH2_REG, 63);
+	if (REG_READ(GDMA_IN_PERI_SEL_CH3_REG) == 0) REG_WRITE(GDMA_IN_PERI_SEL_CH3_REG, 63);
+
+	// DMA-Kontroller 1 auf unseren Puffer umstellen und starten
+	REG_SET_BIT(GDMA_IN_LINK_CH1_REG, GDMA_INLINK_STOP_CH1);
+	REG_SET_BIT(GDMA_IN_CONF1_CH1_REG, GDMA_IN_CHECK_OWNER_CH1);
+	REG_SET_FIELD(GDMA_IN_LINK_CH1_REG, GDMA_INLINK_ADDR_CH1, (int)ABG_DMALIST);
+	REG_SET_BIT(GDMA_IN_LINK_CH1_REG, GDMA_INLINK_START_CH1);
 
 	// DMA-Kontroller 1 auf unseren Puffer umstellen und starten
 	REG_SET_BIT(GDMA_IN_LINK_CH1_REG, GDMA_INLINK_STOP_CH1);
