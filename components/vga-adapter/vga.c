@@ -1,7 +1,5 @@
 #include "globalvars.h"
-#include "main.h"
 #include "pins.h"
-#include <esp_rom_sys.h>
 #include <hal/gpio_hal.h>
 #include <driver/periph_ctrl.h>
 #include <driver/gpio.h>
@@ -9,10 +7,10 @@
 #include <math.h>
 #include <esp_private/gdma.h>
 #include <hal/dma_types.h>
-#include <esp_heap_caps.h>
 
 gdma_channel_handle_t dmaCh = NULL;
 dma_descriptor_t* descriptors = NULL;
+bool osd_enabled = true;
 
 #define HAL_FORCE_MODIFY_U32_REG_FIELD(base_reg, reg_field, field_val)    \
 {                                                           \
@@ -30,44 +28,138 @@ void attachPinToSignal(int pin, int signal)
 	gpio_set_drive_capability((gpio_num_t)pin, (gpio_drive_cap_t)3);
 }
 
+void enable_osd(bool enable)
+{
+    if (enable && !osd_enabled)
+    {
+        if (OSD_TRANSPARENT)
+        {
+            descriptors[ABG_YRes+OSD_HIGHT+OSD_HIGHT-1].next = &descriptors[ABG_YRes+OSD_HIGHT+OSD_HIGHT];
+            descriptors[ABG_YRes+OSD_HIGHT+OSD_HIGHT+ABG_YRes-1].next = descriptors;
+        }
+        else
+        {
+            descriptors[ABG_YRes+OSD_HIGHT+OSD_HIGHT-1].next = descriptors;
+            descriptors[ABG_YRes+OSD_HIGHT+OSD_HIGHT+ABG_YRes-1].next = descriptors;
+        }
+        osd_enabled = true;
+    }
+    if (!enable && osd_enabled)
+    {
+        descriptors[ABG_YRes+OSD_HIGHT+OSD_HIGHT-1].next = &descriptors[ABG_YRes+OSD_HIGHT+OSD_HIGHT];
+        descriptors[ABG_YRes+OSD_HIGHT+OSD_HIGHT+ABG_YRes-1].next = &descriptors[ABG_YRes+OSD_HIGHT+OSD_HIGHT];
+        osd_enabled = false;
+    }
+}
+
 // VGA-Buffer holen, Aufruf nur einmal erlaubt
-void setup_vga_buffer()
+void alloc_vga_buffer()
 {
     // Zeilen-Zeigerliste für DMA-Kontroller
-    descriptors = (dma_descriptor_t *)heap_caps_aligned_calloc(4, 1, (ABG_YRes+OSD_Height) * sizeof(dma_descriptor_t), MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+    descriptors = (dma_descriptor_t *)heap_caps_aligned_calloc(4, 1, ((ABG_YRes*2)+(OSD_HIGHT*2)+2) * sizeof(dma_descriptor_t), MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
     if (!descriptors)
     {
         printf("Fehler: descriptors==null\n");
         return;
     }
 
-    // Zeilen-Zeigerliste für uns
-    VGA_BUF = heap_caps_aligned_calloc(4, 1, (ABG_YRes+OSD_Height) * 4, MALLOC_CAP_INTERNAL);
+    // VGA-Zeilen-Zeigerliste für uns
+    VGA_BUF = heap_caps_aligned_calloc(4, 1, ABG_YRes * 4, MALLOC_CAP_INTERNAL);
     if (!VGA_BUF)
     {
         printf("Fehler: VGA_BUF==null\n");
         return;
     }
 
-    // Pufferspeicher der einzelnen Zeilen
-    for (int i=0; i<(ABG_YRes+OSD_Height); i++) 
+    // OSD-Zeilen-Zeigerliste für uns
+    OSD_BUF = heap_caps_malloc(OSD_HIGHT * 4, MALLOC_CAP_SPIRAM);
+    if (!OSD_BUF)
     {
-        VGA_BUF[i] = heap_caps_aligned_calloc(4, 1, ABG_XRes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        printf("Fehler: OSD_BUF==null\n");
+        return;
+    }
+
+    // Pufferspeicher der einzelnen Zeilen
+    for (int i=0; i<ABG_YRes; i++) 
+    {
+        VGA_BUF[i] = heap_caps_aligned_calloc(4, 1, ABG_XRes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT | MALLOC_CAP_DMA);
         if (!VGA_BUF[i])
         {
             printf("Fehler: VGA_BUF[%d]==null\n",i);
             return;
         }
-	    descriptors[i].buffer = VGA_BUF[i];
-        descriptors[i].dw0.owner = DMA_DESCRIPTOR_BUFFER_OWNER_CPU;
-        descriptors[i].dw0.suc_eof = 0;
-        descriptors[i].next = (i<((ABG_YRes+OSD_Height)-1)) ? (&descriptors[i + 1]) : descriptors;
-        descriptors[i].dw0.size = ABG_XRes;
-        descriptors[i].dw0.length = ABG_XRes;
     }
 
-    OSD_BUF = VGA_BUF;
-    VGA_BUF += OSD_Height;  // Der Capture-Bereich fängt erst weiter unten an
+    // Pufferspeicher der OSD-Zeilen
+    for (int i=0; i<OSD_HIGHT; i++)
+    {
+        OSD_BUF[i] = heap_caps_aligned_calloc(64, 1, OSD_WIDTH, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT | MALLOC_CAP_DMA);
+        if (!OSD_BUF[i])
+        {
+            printf("Fehler: OSD_BUF[%d]==null\n",i);
+            return;
+        }
+    }
+}
+
+// DMA-Descriptoren zuweisen, kann wiederholt werden
+void setup_vga_buffer()
+{
+    // Erster Teil der DMA-Tabelle ist ein Frame mit eingebundenem OSD-Menü
+    int j=0;
+    for (int i=0; i<ABG_YRes; i++) 
+    {
+        if (i<OSD_TOP || i>=(OSD_TOP+OSD_HIGHT))
+        {
+            // Zeilen ohne OSD komplett auf den VGA-Buffer linken
+            descriptors[j].buffer = VGA_BUF[i];
+            descriptors[j].dw0.owner = DMA_DESCRIPTOR_BUFFER_OWNER_CPU;
+            descriptors[j].dw0.suc_eof = 0;
+            descriptors[j].next = &descriptors[j + 1];
+            descriptors[j].dw0.size = ABG_XRes;
+            descriptors[j].dw0.length = ABG_XRes;
+            j++;
+        }
+        else
+        {
+            // Zeilen mit OSD erstmal ein Stück VGA-Buffer...
+            descriptors[j].buffer = VGA_BUF[i];
+            descriptors[j].dw0.owner = DMA_DESCRIPTOR_BUFFER_OWNER_CPU;
+            descriptors[j].dw0.suc_eof = 0;
+            descriptors[j].next = &descriptors[j + 1];
+            descriptors[j].dw0.size = OSD_LEFT;
+            descriptors[j].dw0.length = OSD_LEFT;
+            j++;
+            // ... dann ein Stück OSD-Buffer...
+            descriptors[j].buffer = OSD_BUF[i-OSD_TOP];
+            descriptors[j].dw0.owner = DMA_DESCRIPTOR_BUFFER_OWNER_CPU;
+            descriptors[j].dw0.suc_eof = 0;
+            descriptors[j].next = &descriptors[j + 1];
+            descriptors[j].dw0.size = OSD_WIDTH;
+            descriptors[j].dw0.length = OSD_WIDTH;
+            j++;
+            // ... und den Rest VGA.
+            descriptors[j].buffer = VGA_BUF[i]+OSD_LEFT+OSD_WIDTH;
+            descriptors[j].dw0.owner = DMA_DESCRIPTOR_BUFFER_OWNER_CPU;
+            descriptors[j].dw0.suc_eof = 0;
+            descriptors[j].next = &descriptors[j + 1];
+            descriptors[j].dw0.size = ABG_XRes-OSD_WIDTH-OSD_LEFT;
+            descriptors[j].dw0.length = ABG_XRes-OSD_WIDTH-OSD_LEFT;
+            j++;
+        }
+    }
+    // Der zweite Teil der DMA-Tabelle ist ein Frame ohne OSD-Menü, nur VGA-Buffer
+    for (int i=0; i<ABG_YRes; i++) 
+    {
+        descriptors[j].buffer = VGA_BUF[i];
+        descriptors[j].dw0.owner = DMA_DESCRIPTOR_BUFFER_OWNER_CPU;
+        descriptors[j].dw0.suc_eof = 0;
+        descriptors[j].next = &descriptors[j + 1];
+        descriptors[j].dw0.size = ABG_XRes;
+        descriptors[j].dw0.length = ABG_XRes;
+        j++;
+    }
+    descriptors[j-1].next = descriptors;
 }
 
 // VGA mit der ausgewählten Auflösung starten, kann wiederholt werden
@@ -112,8 +204,8 @@ void setup_vga_mode()
     LCD_CAM.lcd_ctrl1.lcd_ht_width = _STATIC_VGA_VALS[ACTIVEVGA].hFront + _STATIC_VGA_VALS[ACTIVEVGA].hSync + _STATIC_VGA_VALS[ACTIVEVGA].hBack + _STATIC_VGA_VALS[ACTIVEVGA].hRes - 1;
 	
     LCD_CAM.lcd_ctrl2.lcd_vsync_width = _STATIC_VGA_VALS[ACTIVEVGA].vSync - 1;
-    HAL_FORCE_MODIFY_U32_REG_FIELD(LCD_CAM.lcd_ctrl1, lcd_vb_front, _STATIC_VGA_VALS[ACTIVEVGA].vSync + _STATIC_VGA_VALS[ACTIVEVGA].vBack + ((_STATIC_VGA_VALS[ACTIVEVGA].vRes-(ABG_YRes+OSD_Height))/2) - 1);
-    LCD_CAM.lcd_ctrl.lcd_va_height = ABG_YRes + OSD_Height - 1;
+    HAL_FORCE_MODIFY_U32_REG_FIELD(LCD_CAM.lcd_ctrl1, lcd_vb_front, _STATIC_VGA_VALS[ACTIVEVGA].vSync + _STATIC_VGA_VALS[ACTIVEVGA].vBack + ((_STATIC_VGA_VALS[ACTIVEVGA].vRes-ABG_YRes)/2) - 1);
+    LCD_CAM.lcd_ctrl.lcd_va_height = ABG_YRes - 1;
     LCD_CAM.lcd_ctrl.lcd_vt_height = _STATIC_VGA_VALS[ACTIVEVGA].vFront + _STATIC_VGA_VALS[ACTIVEVGA].vSync + _STATIC_VGA_VALS[ACTIVEVGA].vBack + _STATIC_VGA_VALS[ACTIVEVGA].vRes - 1;
 
 	LCD_CAM.lcd_ctrl2.lcd_hs_blank_en = 1;

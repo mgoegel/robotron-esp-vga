@@ -1,8 +1,15 @@
 #pragma once
 
-#include <limits.h>
 #include "nvs_flash.h"
 #include "nvs.h"
+#include "freertos/FreeRTOS.h"
+#include "esp_http_server.h"
+#include "esp_wps.h"
+
+#define _SETTINGS_COUNT 6 // Anzahl unterstützter Computer (A7100,PC1715,EC1835,K7024,VIDEO3,VIS2A)
+#define _COLORSCHEME_COUNT 3 // Anzahl unterstützter Farbschema (+custom)
+#define _VGAMODE_COUNT 4 // Anzahl VGA-Modes (640x400x70, 640x480x60, 800x600x56, 800x600x60)
+#define Language_count 2
 
 // Statische Struktur - Systemkonstanten
 struct SYSSTATIC {
@@ -21,15 +28,13 @@ struct SYSSTATIC {
 
 // Statische Struktur - Farben
 struct COLORSTATIC {
-	char* shortname;
-	char* longname;
+	char* name[Language_count];
 	uint8_t colors[4];
 };
 
 // Statische Struktur - VGA-Modus
 struct VGASTATIC {
-	char* shortname;
-	char* longname;
+	char* name;
 	uint16_t hFront;
 	uint16_t hSync;
 	uint16_t hBack;
@@ -57,10 +62,12 @@ extern const struct VGASTATIC _STATIC_VGA_VALS[];
 #define _NVS_SETTING_COLORSCHEMA	"COLORSCHEMA"
 #define _NVS_SETTING_CUSTOMCOLORS	"CUSTOMCOLORS"
 #define _NVS_SETTING_VGAMODE	"VGAMODE(%d)"
-
-#define _SETTINGS_COUNT 6 // Anzahl unterstützter Computer (A7100,PC1715,EC1835,K7024,VIDEO3,VIS2A)
-#define _COLORSCHEME_COUNT 3 // Anzahl unterstützter Farbschema (+custom)
-#define _VGAMODE_COUNT 4 // Anzahl VGA-Modes (640x400x70, 640x480x60, 800x600x56, 800x600x60)
+#define _NVS_SETTING_SSID	"SSID"
+#define _NVS_SETTING_PASSWD	"PASSWD"
+#define _NVS_SETTING_TRANSPARENT "TRANSPARENT"
+#define _NVS_SETTING_ROTATE "ROTATE"
+#define _NVS_SETTING_WLANMODE "WLANMODE"
+#define _NVS_SETTING_LANGUAGE "LANGUAGE"
 
 // globale Variablen
 
@@ -76,12 +83,19 @@ extern volatile double ABG_PIXEL_PER_LINE;
 extern volatile double BSYNC_PIXEL_ABSTAND;
 extern volatile uint32_t ABG_START_LINE;
 extern volatile bool ABG_RUN;
+
+extern bool OSD_TRANSPARENT;
+extern uint16_t OSD_TOP;
+extern uint16_t OSD_LEFT;
+extern const uint16_t OSD_HIGHT;
+extern const uint16_t OSD_WIDTH;
+extern uint8_t OSD_KEY_ROTATE;
+
 extern uint32_t ABG_Interleave_Mask;
 extern uint32_t ABG_Interleave;
 extern uint16_t ABG_XRes;
 extern uint16_t ABG_YRes;
 extern uint8_t ABG_Bits_per_sample;
-extern uint8_t OSD_Height;
 
 extern uint8_t* PIXEL_STEP_LIST;
 extern uint8_t** VGA_BUF;
@@ -90,6 +104,17 @@ extern volatile uint32_t bsyn_clock_diff;
 extern volatile uint32_t bsyn_clock_last;
 extern volatile uint32_t bsyn_clock_frame;
 extern volatile uint32_t BSYNC_SAMPLE_ABSTAND;
-extern int8_t Current_Color_Scheme;
+extern uint8_t Current_Color_Scheme;
 extern uint8_t Current_Colors[4];
 extern uint8_t Custom_Colors[4];
+
+extern uint8_t this_app_id;
+extern uint8_t next_app_id;
+
+extern char* wlan_state;
+extern char* wlan_ssid;
+extern char* ap_ssid;
+extern char* wlan_passwd;
+extern uint8_t wlan_mode;
+
+extern uint8_t Language;
