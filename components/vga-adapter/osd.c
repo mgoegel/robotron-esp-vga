@@ -772,7 +772,8 @@ void osd_task(void*)
 								}
 								break;
 							case 9: //Streaming aktivieren
-								draw_text_value("2s\x82",i);
+								snprintf(tb, 50, "%s 2s\x82",TextOFF[Language]);
+								draw_text_value(tb,i);
 								break;
 							case 10: //Sprache
 								draw_text_value(TextLanguage[Language],i);
@@ -1084,7 +1085,6 @@ void osd_task(void*)
 								snprintf(osd_ovrstatus,25,"2s\x80%s \x81%s",TextAccept[Language],TextCancel[Language]);
 							}
 							if (menu_subsel>1 && !osd_repeat) menu_subsel--;
-							if (menu_subsel==2) menu_subsel=1; // WPS-Mode funktioniert mit der Speicher-Einstellung nicht richtig: überblättern!
 							break;
 						case 7: // Wlan SSID
 							if (menu_subsel>1 && !osd_repeat) menu_subsel--;
@@ -1186,7 +1186,6 @@ void osd_task(void*)
 								snprintf(osd_ovrstatus,25,"2s\x80%s \x81%s",TextAccept[Language],TextCancel[Language]);
 							}
 							if (menu_subsel<4 && !osd_repeat) menu_subsel++;
-							if (menu_subsel==2) menu_subsel=3; // WPS-Mode funktioniert mit der Speicher-Einstellung nicht richtig: überblättern!
 							break;
 						case 7: // Wlan SSID
 							if (menu_subsel>0)

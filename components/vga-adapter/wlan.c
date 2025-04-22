@@ -35,7 +35,10 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t e
 	{
 		case WIFI_EVENT_STA_START:
 	        printf("WIFI_EVENT_STA_START\n");
-			esp_wifi_connect();
+			if (wlan_mode==2)
+			{
+				esp_wifi_connect();
+			}
 			snprintf(wlan_state,21,TextConnecting[Language]);
 			force_status_type(2);
 			break;
@@ -171,10 +174,10 @@ void setup_wlan(uint8_t new_mode)
 		esp_event_loop_delete_default();
 		esp_wifi_deinit();
 		net_if=NULL;
-		snprintf(wlan_state,22,TextDiscon[Language]);
 		force_status_type(2);
 		gpio_set_level(PIN_NUM_LED_WIFI,0);
 	}
+	snprintf(wlan_state,22,TextDiscon[Language]);
 	stop_webserver();
 
 	current_mode = 0;
