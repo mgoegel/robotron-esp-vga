@@ -237,7 +237,7 @@ const struct MENUITEM osd_menu[] =
 	},
 	{
 		.name = {"Startzeile", "Start line"},
-		.description = {"Anzahl Zeilen zwischen\n1. Zeile und VSync", "Lines between 1st\nline and HSync"},
+		.description = {"Anzahl Zeilen zwischen\n1. Zeile und VSync", "Lines between 1st\nline and VSync"},
 		.typ = MT_INTVALUE,
 		.value1 = (uint32_t)&ABG_START_LINE,
 		.value2 = 3,
@@ -772,8 +772,7 @@ void osd_task(void*)
 								}
 								break;
 							case 9: //Streaming aktivieren
-								snprintf(tb, 50, "%s 2s\x82",TextOFF[Language]);
-								draw_text_value(tb,i);
+								draw_text_value(((menu_subsel & 1)!=0 && menu_sel==l)? TextON[Language] : TextOFF[Language],i);
 								break;
 							case 10: //Sprache
 								draw_text_value(TextLanguage[Language],i);
@@ -907,6 +906,22 @@ void osd_task(void*)
 								else a++;
 								pw[menu_subsel-1]=a;
 								break;
+							case 9: // streaming
+								if (osd_repeat && next_app_id!=this_app_id) 
+								{
+									if (menu_subsel==1)
+									{
+										const esp_partition_t *part = esp_partition_find_first(ESP_PARTITION_TYPE_APP, next_app_id, NULL);
+										if (part!=NULL)
+										{
+											esp_ota_set_boot_partition(part);
+											esp_restart();
+										}
+									}
+									menu_subsel = 0;
+									osd_ovrstatus[0] = 0;
+								}
+								break;
 							case 12: // Keybinding
 								if (osd_repeat)
 								{
@@ -955,6 +970,7 @@ void osd_task(void*)
 						{
 							case 0: //Computer-Profil
 							case 5: //Wlan-modus
+							case 9: // streaming
 							case 12: // Keybinding
 								menu_subsel = 0;
 								osd_ovrstatus[0] = 0;
@@ -1104,7 +1120,13 @@ void osd_task(void*)
 								while (gpio_get_level(MAP_PIN_LEFT)==0 || gpio_get_level(MAP_PIN_UP)==0 || gpio_get_level(MAP_PIN_DOWN)==0 || gpio_get_level(MAP_PIN_RIGHT)==0);
 							}
 							break;
-						case 9: // Streaming aktivieren
+						case 9: // Streaming deaktivieren
+							if (menu_subsel==0)
+							{
+								menu_subsel = 2;
+								snprintf(osd_ovrstatus,25,"2s\x80%s \x81%s",TextAccept[Language],TextCancel[Language]);
+							}
+							menu_subsel = menu_subsel ^ 3;
 							break;
 						case 10: // Sprache
 							Language = (Language-1) & 1;
@@ -1223,16 +1245,13 @@ void osd_task(void*)
 								while (gpio_get_level(MAP_PIN_LEFT)==0 || gpio_get_level(MAP_PIN_UP)==0 || gpio_get_level(MAP_PIN_DOWN)==0 || gpio_get_level(MAP_PIN_RIGHT)==0);
 							}
 							break;
-						case 9: // Streaming aktivieren
-							if (osd_repeat && next_app_id!=this_app_id) 
+						case 9: // Streaming deaktivieren
+							if (menu_subsel==0)
 							{
-								const esp_partition_t *part = esp_partition_find_first(ESP_PARTITION_TYPE_APP, next_app_id, NULL);
-								if (part!=NULL)
-								{
-									esp_ota_set_boot_partition(part);
-									esp_restart();
-								}
+								menu_subsel = 2;
+								snprintf(osd_ovrstatus,25,"2s\x80%s \x81%s",TextAccept[Language],TextCancel[Language]);
 							}
+							menu_subsel = menu_subsel ^ 3;
 							break;
 						case 10: // Sprache
 							Language = (Language+1) & 1;
