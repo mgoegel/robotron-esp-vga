@@ -90,6 +90,7 @@ extern uint16_t OSD_LEFT;
 extern const uint16_t OSD_HIGHT;
 extern const uint16_t OSD_WIDTH;
 extern uint8_t OSD_KEY_ROTATE;
+extern bool osd_enabled;
 
 extern uint32_t ABG_Interleave_Mask;
 extern uint32_t ABG_Interleave;
