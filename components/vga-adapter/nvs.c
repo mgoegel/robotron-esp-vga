@@ -133,8 +133,10 @@ bool restore_settings()
 		Current_Color_Scheme =  0;
 		printf("Colorschema-Einstellung nicht gefunden, nutze default = %d\n",Current_Color_Scheme);
 	}
+	// Negativer Gültigkeitsbereich nicht verfügbar, daher minimaler Wert für Current_Color_Scheme=0 (uint8)
+	// Nur Prüfung auf Bereichüberschreitung nötig
 	if (Current_Color_Scheme>_COLORSCHEME_COUNT) Current_Color_Scheme=_COLORSCHEME_COUNT;
-	if (Current_Color_Scheme<0) Current_Color_Scheme=0;
+
 	if (nvs_get_u32(sys_nvs_handle, _NVS_SETTING_CUSTOMCOLORS, (uint32_t*)&Custom_Colors[0]) != ESP_OK) 
 	{
 		for (int i=0;i<4;i++)
