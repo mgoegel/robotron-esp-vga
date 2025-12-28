@@ -111,7 +111,7 @@ const struct VGASTATIC _STATIC_VGA_VALS[] = {
 		.vRes=400,
 		.frequency=25175000,
 		.vPol=1,
-		.hPol=1,
+		.hPol=0,
 	},
 	{
 		.name="640x480x60",
@@ -124,8 +124,8 @@ const struct VGASTATIC _STATIC_VGA_VALS[] = {
 		.vBack=33,
 		.vRes=480,
 		.frequency=25175000,
-		.vPol=1,
-		.hPol=1,
+		.vPol=0,
+		.hPol=0,
 	},
 	{
 		.name="800x600x56",
